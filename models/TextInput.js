@@ -90,8 +90,14 @@ const textInputSchema = new mongoose.Schema({
     mediaActionType: { type: String, default: '' },
     
     // Enhanced UI Information
-    viewBounds: String,
-    viewRect: String,
+    viewBounds: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null
+    },
+    viewRect: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null
+    },
     isEditable: {
         type: Boolean,
         default: false
@@ -299,8 +305,8 @@ const textInputSchema = new mongoose.Schema({
     
     // Custom Metadata
     customMetadata: {
-        type: Map,
-        of: String
+        type: mongoose.Schema.Types.Mixed,
+        default: null
     },
     tags: [String],
     priority: {
