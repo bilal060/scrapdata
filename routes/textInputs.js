@@ -6,6 +6,7 @@ const { authenticateApiKey } = require('../middleware/auth');
 // POST /api/text-inputs - Save text input
 router.post('/', authenticateApiKey, async (req, res) => {
     try {
+        console.log('Received text input data:', JSON.stringify(req.body, null, 2));
         const {
             id,
             timestamp,
@@ -307,6 +308,8 @@ router.post('/', authenticateApiKey, async (req, res) => {
 
     } catch (error) {
         console.error('Error saving text input:', error);
+        console.error('Error details:', error.message);
+        console.error('Error stack:', error.stack);
         
         if (error.code === 11000) {
             // With upsert this should be rare, but handle gracefully
@@ -315,7 +318,7 @@ router.post('/', authenticateApiKey, async (req, res) => {
             res.status(500).json({
                 success: false,
                 message: 'Internal server error',
-                error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+                error: error.message
             });
         }
     }
