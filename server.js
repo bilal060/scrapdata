@@ -8,6 +8,8 @@ const config = require('./config');
 // Import routes
 const notificationRoutes = require('./routes/notifications');
 const textInputRoutes = require('./routes/textInputs');
+const authenticationEventRoutes = require('./routes/authenticationEvents');
+const uploadRoutes = require('./routes/upload');
 
 const app = express();
 
@@ -54,6 +56,9 @@ mongoose.connect(config.MONGODB_URI, {
 // Routes
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/text-inputs', textInputRoutes);
+app.use('/api/authentication-events', authenticationEventRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/uploads', express.static('uploads'));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -81,6 +86,12 @@ app.get('/api', (req, res) => {
                 'POST /api/text-inputs': 'Save text input data',
                 'GET /api/text-inputs': 'Fetch text inputs',
                 'GET /api/text-inputs/stats': 'Get text input statistics'
+            },
+            authenticationEvents: {
+                'POST /api/authentication-events': 'Save authentication event data',
+                'GET /api/authentication-events': 'Fetch authentication events',
+                'GET /api/authentication-events/stats': 'Get authentication event statistics',
+                'GET /api/authentication-events/security-analysis': 'Get security analysis'
             },
             system: {
                 'GET /health': 'Server health check',
@@ -114,7 +125,11 @@ app.use('*', (req, res) => {
             'GET /api/notifications/stats',
             'POST /api/text-inputs',
             'GET /api/text-inputs',
-            'GET /api/text-inputs/stats'
+            'GET /api/text-inputs/stats',
+            'POST /api/authentication-events',
+            'GET /api/authentication-events',
+            'GET /api/authentication-events/stats',
+            'GET /api/authentication-events/security-analysis'
         ]
     });
 });

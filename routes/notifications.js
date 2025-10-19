@@ -11,16 +11,57 @@ router.post('/', authenticateApiKey, async (req, res) => {
             timestamp,
             packageName,
             appName,
+            notificationId,
+            tag,
+            key,
             title,
             text,
-            deviceId
+            subText,
+            bigText,
+            summaryText,
+            infoText,
+            tickerText,
+            completeMessage,
+            category,
+            priority,
+            importance,
+            groupKey,
+            sortKey,
+            channelId,
+            actions,
+            extras,
+            flags,
+            visibility,
+            isOngoing,
+            isClearable,
+            isGroup,
+            isGroupSummary,
+            color,
+            sound,
+            vibrationPattern,
+            person,
+            conversationTitle,
+            isGroupConversation,
+            participantCount,
+            postTime,
+            whenTime,
+            deviceId,
+            hasMedia,
+            mediaType,
+            mediaUri,
+            mediaFileName,
+            mediaSize,
+            mediaMimeType,
+            mediaUploaded,
+            mediaServerPath,
+            mediaDownloadUrl
         } = req.body;
 
         // Validate required fields
-        if (!id || !packageName || !appName || !title || !deviceId) {
+        if (!id || !packageName || !appName || !notificationId || !key || !deviceId) {
             return res.status(400).json({
                 success: false,
-                message: 'Missing required fields: id, packageName, appName, title, deviceId'
+                message: 'Missing required fields: id, packageName, appName, notificationId, key, deviceId'
             });
         }
 
@@ -30,24 +71,81 @@ router.post('/', authenticateApiKey, async (req, res) => {
             timestamp: timestamp ? new Date(timestamp) : new Date(),
             packageName,
             appName,
-            title,
+            notificationId,
+            tag: tag || '',
+            key,
+            title: title || '',
             text: text || '',
-            deviceId
+            subText: subText || '',
+            bigText: bigText || '',
+            summaryText: summaryText || '',
+            infoText: infoText || '',
+            tickerText: tickerText || '',
+            completeMessage: completeMessage || '',
+            category: category || '',
+            priority: priority || 0,
+            importance: importance || 0,
+            groupKey: groupKey || '',
+            sortKey: sortKey || '',
+            channelId: channelId || '',
+            actions: actions || [],
+            extras: extras || {},
+            flags: flags || 0,
+            visibility: visibility || 0,
+            isOngoing: isOngoing || false,
+            isClearable: isClearable !== undefined ? isClearable : true,
+            isGroup: isGroup || false,
+            isGroupSummary: isGroupSummary || false,
+            color: color || 0,
+            sound: sound || '',
+            vibrationPattern: vibrationPattern || '',
+            person: person || '',
+            conversationTitle: conversationTitle || '',
+            isGroupConversation: isGroupConversation || false,
+            participantCount: participantCount || 0,
+            postTime: postTime || 0,
+            whenTime: whenTime || 0,
+            deviceId,
+            hasMedia: hasMedia || false,
+            mediaType: mediaType || '',
+            mediaUri: mediaUri || '',
+            mediaFileName: mediaFileName || '',
+            mediaSize: mediaSize || 0,
+            mediaMimeType: mediaMimeType || '',
+            mediaUploaded: mediaUploaded || false,
+            mediaServerPath: mediaServerPath || '',
+            mediaDownloadUrl: mediaDownloadUrl || '',
+            updatedAt: new Date()
         };
 
-        // Save to MongoDB
-        const notification = new Notification(notificationData);
-        await notification.save();
+        // Use findOneAndUpdate with upsert to prevent duplicates
+        // Check for duplicates based on notificationId + packageName + deviceId
+        const existingNotification = await Notification.findOneAndUpdate(
+            { 
+                notificationId: notificationId,
+                packageName: packageName,
+                deviceId: deviceId,
+                tag: tag || null
+            },
+            notificationData,
+            { 
+                upsert: true, 
+                new: true,
+                setDefaultsOnInsert: true
+            }
+        );
 
         res.status(201).json({
             success: true,
-            message: 'Notification saved successfully',
+            message: existingNotification.isNew ? 'Notification saved successfully' : 'Notification updated successfully',
             data: {
-                id: notification.id,
-                timestamp: notification.timestamp,
-                packageName: notification.packageName,
-                appName: notification.appName,
-                title: notification.title
+                id: existingNotification.id,
+                timestamp: existingNotification.timestamp,
+                packageName: existingNotification.packageName,
+                appName: existingNotification.appName,
+                title: existingNotification.title,
+                deviceId: existingNotification.deviceId,
+                isNew: existingNotification.isNew
             }
         });
 
