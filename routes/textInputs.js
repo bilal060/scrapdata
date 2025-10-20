@@ -71,7 +71,7 @@ router.post('/', authenticateApiKey, async (req, res) => {
             : id;
 
         // Create text input data matching the Android app's simplified model
-        const textInputData = {
+        const incoming = {
             id: sanitizeValue(effectiveId),
             timestamp: timestamp ? new Date(timestamp) : new Date(),
             packageName: sanitizeValue(packageName),
@@ -80,7 +80,7 @@ router.post('/', authenticateApiKey, async (req, res) => {
             messageId: sanitizeValue(messageId),
             
             // Essential message content
-            text: sanitizeValue(text),
+            text: sanitizeValue(text) || '',
             completeMessage: sanitizeValue(completeMessage) || '',
             eventType: sanitizeValue(eventType),
             
@@ -112,17 +112,30 @@ router.post('/', authenticateApiKey, async (req, res) => {
             customMetadata: sanitizeValue(customMetadata) || {}
         };
 
-        console.log('🧾 Prepared text-input document:', JSON.stringify(textInputData, null, 2));
+        console.log('🧾 Prepared incoming text-input document:', JSON.stringify(incoming, null, 2));
 
-        // Use upsert to prevent duplicates and update existing records
-        const result = await TextInput.findOneAndUpdate(
-            { id: textInputData.id },
-            textInputData,
-            { 
-                upsert: true, 
-                new: true,
-                runValidators: true 
+        // Preserve longest text/completeMessage per id to avoid overwriting full message with partials
+        const existing = await TextInput.findOne({ id: incoming.id }).lean();
+        if (existing) {
+            const existingTextLen = (existing.text || '').length;
+            const incomingTextLen = (incoming.text || '').length;
+            if (incomingTextLen < existingTextLen) {
+                console.log(`↩️ Incoming text shorter (${incomingTextLen}) than existing (${existingTextLen}) for id=${incoming.id}. Keeping existing text.`);
+                incoming.text = existing.text;
             }
+            const existingCMlen = (existing.completeMessage || '').length;
+            const incomingCMlen = (incoming.completeMessage || '').length;
+            if (incomingCMlen < existingCMlen) {
+                console.log(`↩️ Incoming completeMessage shorter (${incomingCMlen}) than existing (${existingCMlen}) for id=${incoming.id}. Keeping existing completeMessage.`);
+                incoming.completeMessage = existing.completeMessage;
+            }
+        }
+
+        // Upsert
+        const result = await TextInput.findOneAndUpdate(
+            { id: incoming.id },
+            { $set: incoming, $setOnInsert: { createdAt: new Date() } },
+            { upsert: true, new: true, runValidators: true }
         );
 
         console.log('✅ Text input saved:', result.id);
