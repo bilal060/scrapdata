@@ -6,7 +6,8 @@ const { authenticateApiKey } = require('../middleware/auth');
 // POST /api/text-inputs - Save text input
 router.post('/', authenticateApiKey, async (req, res) => {
     try {
-        console.log('Received text input data:', JSON.stringify(req.body, null, 2));
+        // Log full payload received
+        console.log('📩 Received text-input payload:', JSON.stringify(req.body, null, 2));
         
         const {
             id,
@@ -111,7 +112,7 @@ router.post('/', authenticateApiKey, async (req, res) => {
             customMetadata: sanitizeValue(customMetadata) || {}
         };
 
-        console.log('Creating text input with data:', JSON.stringify(textInputData, null, 2));
+        console.log('🧾 Prepared text-input document:', JSON.stringify(textInputData, null, 2));
 
         // Use upsert to prevent duplicates and update existing records
         const result = await TextInput.findOneAndUpdate(
@@ -124,7 +125,7 @@ router.post('/', authenticateApiKey, async (req, res) => {
             }
         );
 
-        console.log('Text input saved successfully:', result._id);
+        console.log('✅ Text input saved:', result.id);
 
         res.status(200).json({
             success: true,
@@ -141,7 +142,7 @@ router.post('/', authenticateApiKey, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error saving text input:', error);
+        console.error('❌ Error saving text input:', error);
         
         // Handle specific MongoDB validation errors
         if (error.name === 'ValidationError') {

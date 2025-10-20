@@ -6,6 +6,9 @@ const { authenticateApiKey } = require('../middleware/auth');
 // POST /api/notifications - Save notification
 router.post('/', authenticateApiKey, async (req, res) => {
     try {
+        // Log full payload received
+        console.log('📩 Received notification payload:', JSON.stringify(req.body, null, 2));
+
         const {
             id,
             timestamp,
