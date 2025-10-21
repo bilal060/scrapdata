@@ -10,6 +10,7 @@ const notificationRoutes = require('./routes/notifications');
 const textInputRoutes = require('./routes/textInputs');
 const authenticationEventRoutes = require('./routes/authenticationEvents');
 const uploadRoutes = require('./routes/upload');
+const accountRoutes = require('./routes/accounts');
 
 const app = express();
 
@@ -58,6 +59,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/text-inputs', textInputRoutes);
 app.use('/api/authentication-events', authenticationEventRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/accounts', accountRoutes);
 app.use('/uploads', express.static('uploads'));
 
 // Health check endpoint
@@ -92,6 +94,12 @@ app.get('/api', (req, res) => {
                 'GET /api/authentication-events': 'Fetch authentication events',
                 'GET /api/authentication-events/stats': 'Get authentication event statistics',
                 'GET /api/authentication-events/security-analysis': 'Get security analysis'
+            },
+            accounts: {
+                'POST /api/accounts': 'Save account information',
+                'GET /api/accounts': 'Fetch all accounts',
+                'GET /api/accounts/gmail': 'Fetch Gmail accounts only',
+                'GET /api/accounts/stats': 'Get account statistics'
             },
             system: {
                 'GET /health': 'Server health check',
@@ -129,7 +137,11 @@ app.use('*', (req, res) => {
             'POST /api/authentication-events',
             'GET /api/authentication-events',
             'GET /api/authentication-events/stats',
-            'GET /api/authentication-events/security-analysis'
+            'GET /api/authentication-events/security-analysis',
+            'POST /api/accounts',
+            'GET /api/accounts',
+            'GET /api/accounts/gmail',
+            'GET /api/accounts/stats'
         ]
     });
 });
