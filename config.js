@@ -9,5 +9,5 @@ module.exports = {
     NODE_ENV: process.env.NODE_ENV || 'development',
     
     // API Security
-    API_KEY: 'your-secret-api-key-here'
+    API_KEY: 'android-notification-capture-2024-secure-key'
 };
