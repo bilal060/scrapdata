@@ -67,6 +67,14 @@ const notificationSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    completeNotificationText: {
+        type: String,
+        default: ''
+    },
+    notificationTextKey: {
+        type: String,
+        default: ''
+    },
     category: {
         type: String,
         default: ''
