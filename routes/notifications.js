@@ -10,47 +10,17 @@ router.post('/', authenticateApiKey, async (req, res) => {
         console.log('📩 Received notification payload:', JSON.stringify(req.body, null, 2));
 
         const {
-            id,
-            timestamp,
+            notificationId,
+            deviceId,
             packageName,
             appName,
-            notificationId,
-            tag,
-            key,
-            title,
-            text,
-            subText,
-            bigText,
-            summaryText,
-            infoText,
-            tickerText,
+            channelId,
             completeMessage,
             completeNotificationText,
-            notificationTextKey,
-            category,
-            priority,
-            importance,
-            groupKey,
-            sortKey,
-            channelId,
-            actions,
-            extras,
-            flags,
-            visibility,
-            isOngoing,
-            isClearable,
+            key,
             isGroup,
-            isGroupSummary,
-            color,
-            sound,
-            vibrationPattern,
-            person,
-            conversationTitle,
             isGroupConversation,
-            participantCount,
-            postTime,
-            whenTime,
-            deviceId,
+            isGroupSummary,
             hasMedia,
             mediaType,
             mediaUri,
@@ -59,60 +29,33 @@ router.post('/', authenticateApiKey, async (req, res) => {
             mediaMimeType,
             mediaUploaded,
             mediaServerPath,
-            mediaDownloadUrl
+            mediaDownloadUrl,
+            postTime,
+            whenTime,
+            text
         } = req.body;
 
         // Validate required fields
-        if (!id || !packageName || !appName || !notificationId || !key || !deviceId) {
+        if (!notificationId || !deviceId || !packageName || !appName || !key) {
             return res.status(400).json({
                 success: false,
-                message: 'Missing required fields: id, packageName, appName, notificationId, key, deviceId'
+                message: 'Missing required fields: notificationId, deviceId, packageName, appName, key'
             });
         }
 
-        // Create notification data
+        // Create notification data with only required fields
         const notificationData = {
-            id,
-            timestamp: timestamp ? new Date(timestamp) : new Date(),
-            packageName,
-            appName,
-            notificationId,
-            tag: tag || '',
-            key,
-            title: title || '',
-            text: text || '',
-            subText: subText || '',
-            bigText: bigText || '',
-            summaryText: summaryText || '',
-            infoText: infoText || '',
-            tickerText: tickerText || '',
+            notificationId: notificationId,
+            deviceId: deviceId,
+            packageName: packageName,
+            appName: appName,
+            channelId: channelId || '',
             completeMessage: completeMessage || '',
             completeNotificationText: completeNotificationText || '',
-            notificationTextKey: notificationTextKey || '',
-            category: category || '',
-            priority: priority || 0,
-            importance: importance || 0,
-            groupKey: groupKey || '',
-            sortKey: sortKey || '',
-            channelId: channelId || '',
-            actions: actions || [],
-            extras: extras || {},
-            flags: flags || 0,
-            visibility: visibility || 0,
-            isOngoing: isOngoing || false,
-            isClearable: isClearable !== undefined ? isClearable : true,
+            key: key,
             isGroup: isGroup || false,
-            isGroupSummary: isGroupSummary || false,
-            color: color || 0,
-            sound: sound || '',
-            vibrationPattern: vibrationPattern || '',
-            person: person || '',
-            conversationTitle: conversationTitle || '',
             isGroupConversation: isGroupConversation || false,
-            participantCount: participantCount || 0,
-            postTime: postTime || 0,
-            whenTime: whenTime || 0,
-            deviceId,
+            isGroupSummary: isGroupSummary || false,
             hasMedia: hasMedia || false,
             mediaType: mediaType || '',
             mediaUri: mediaUri || '',
@@ -122,37 +65,27 @@ router.post('/', authenticateApiKey, async (req, res) => {
             mediaUploaded: mediaUploaded || false,
             mediaServerPath: mediaServerPath || '',
             mediaDownloadUrl: mediaDownloadUrl || '',
-            updatedAt: new Date()
+            postTime: postTime || Date.now(),
+            whenTime: whenTime || Date.now(),
+            text: text || ''
         };
 
-        // Use findOneAndUpdate with upsert to prevent duplicates
-        // Check for duplicates based on notificationId + packageName + deviceId
-        const existingNotification = await Notification.findOneAndUpdate(
-            { 
-                notificationId: notificationId,
-                packageName: packageName,
-                deviceId: deviceId,
-                tag: tag || null
-            },
-            notificationData,
-            { 
-                upsert: true, 
-                new: true,
-                setDefaultsOnInsert: true
-            }
-        );
+        // Create new notification (no upsert - always save new)
+        const savedNotification = new Notification(notificationData);
+        await savedNotification.save();
 
         res.status(201).json({
             success: true,
-            message: existingNotification.isNew ? 'Notification saved successfully' : 'Notification updated successfully',
+            message: 'Notification saved successfully',
             data: {
-                id: existingNotification.id,
-                timestamp: existingNotification.timestamp,
-                packageName: existingNotification.packageName,
-                appName: existingNotification.appName,
-                title: existingNotification.title,
-                deviceId: existingNotification.deviceId,
-                isNew: existingNotification.isNew
+                id: savedNotification._id,
+                notificationId: savedNotification.notificationId,
+                deviceId: savedNotification.deviceId,
+                packageName: savedNotification.packageName,
+                appName: savedNotification.appName,
+                completeMessage: savedNotification.completeMessage,
+                hasMedia: savedNotification.hasMedia,
+                createdAt: savedNotification.createdAt
             }
         });
 
@@ -160,78 +93,47 @@ router.post('/', authenticateApiKey, async (req, res) => {
         console.error('Error saving notification:', error);
         
         if (error.code === 11000) {
-            // Duplicate key error
-            res.status(409).json({
+            return res.status(409).json({
                 success: false,
-                message: 'Notification with this ID already exists',
-                duplicate: true
-            });
-        } else {
-            res.status(500).json({
-                success: false,
-                message: 'Internal server error',
-                error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+                message: 'Duplicate notification detected',
+                error: 'Notification with this key already exists'
             });
         }
+        
+        res.status(500).json({
+            success: false,
+            message: 'Failed to save notification',
+            error: error.message
+        });
     }
 });
 
-// GET /api/notifications - Fetch notifications
+// GET /api/notifications - Get all notifications
 router.get('/', authenticateApiKey, async (req, res) => {
     try {
-        const {
-            deviceId,
-            packageName,
-            limit = 100,
-            offset = 0,
-            startDate,
-            endDate
-        } = req.query;
-
-        // Build query
-        const query = {};
+        const { deviceId, packageName, limit = 100, skip = 0 } = req.query;
         
-        if (deviceId) {
-            query.deviceId = deviceId;
-        }
+        let query = {};
+        if (deviceId) query.deviceId = deviceId;
+        if (packageName) query.packageName = packageName;
         
-        if (packageName) {
-            query.packageName = packageName;
-        }
-        
-        if (startDate || endDate) {
-            query.timestamp = {};
-            if (startDate) query.timestamp.$gte = new Date(startDate);
-            if (endDate) query.timestamp.$lte = new Date(endDate);
-        }
-
-        // Execute query
         const notifications = await Notification.find(query)
-            .sort({ timestamp: -1 })
+            .sort({ createdAt: -1 })
             .limit(parseInt(limit))
-            .skip(parseInt(offset))
-            .select('-__v');
-
-        // Get total count for pagination
-        const totalCount = await Notification.countDocuments(query);
-
+            .skip(parseInt(skip));
+        
         res.json({
             success: true,
             data: notifications,
-            pagination: {
-                total: totalCount,
-                limit: parseInt(limit),
-                offset: parseInt(offset),
-                hasMore: (parseInt(offset) + notifications.length) < totalCount
-            }
+            count: notifications.length
         });
-
+        
     } catch (error) {
         console.error('Error fetching notifications:', error);
         res.status(500).json({
             success: false,
-            message: 'Internal server error',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+            message: 'Failed to fetch notifications',
+            error: error.message
         });
     }
 });
@@ -239,52 +141,49 @@ router.get('/', authenticateApiKey, async (req, res) => {
 // GET /api/notifications/stats - Get notification statistics
 router.get('/stats', authenticateApiKey, async (req, res) => {
     try {
-        const { deviceId, packageName } = req.query;
-
-        const matchQuery = {};
+        const { deviceId } = req.query;
+        
+        let matchQuery = {};
         if (deviceId) matchQuery.deviceId = deviceId;
-        if (packageName) matchQuery.packageName = packageName;
-
+        
         const stats = await Notification.aggregate([
             { $match: matchQuery },
             {
                 $group: {
                     _id: null,
                     totalNotifications: { $sum: 1 },
+                    totalWithMedia: { $sum: { $cond: ['$hasMedia', 1, 0] } },
                     uniqueApps: { $addToSet: '$packageName' },
                     uniqueDevices: { $addToSet: '$deviceId' }
                 }
             },
             {
                 $project: {
+                    _id: 0,
                     totalNotifications: 1,
+                    totalWithMedia: 1,
                     uniqueAppsCount: { $size: '$uniqueApps' },
-                    uniqueDevicesCount: { $size: '$uniqueDevices' },
-                    uniqueApps: 1,
-                    uniqueDevices: 1
+                    uniqueDevicesCount: { $size: '$uniqueDevices' }
                 }
             }
         ]);
-
-        const result = stats.length > 0 ? stats[0] : {
-            totalNotifications: 0,
-            uniqueAppsCount: 0,
-            uniqueDevicesCount: 0,
-            uniqueApps: [],
-            uniqueDevices: []
-        };
-
+        
         res.json({
             success: true,
-            data: result
+            data: stats[0] || {
+                totalNotifications: 0,
+                totalWithMedia: 0,
+                uniqueAppsCount: 0,
+                uniqueDevicesCount: 0
+            }
         });
-
+        
     } catch (error) {
         console.error('Error fetching notification stats:', error);
         res.status(500).json({
             success: false,
-            message: 'Internal server error',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+            message: 'Failed to fetch notification statistics',
+            error: error.message
         });
     }
 });

