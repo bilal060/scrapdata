@@ -1,6 +1,12 @@
 const mongoose = require('mongoose');
 
 const notificationSchema = new mongoose.Schema({
+    // Unique identifier
+    uniqueId: {
+        type: String,
+        required: true,
+        unique: true
+    },
     // Core identification fields
     notificationId: {
         type: Number,

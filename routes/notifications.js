@@ -10,6 +10,7 @@ router.post('/', authenticateApiKey, async (req, res) => {
         console.log('📩 Received notification payload:', JSON.stringify(req.body, null, 2));
 
         const {
+            uniqueId,
             notificationId,
             deviceId,
             packageName,
@@ -36,15 +37,16 @@ router.post('/', authenticateApiKey, async (req, res) => {
         } = req.body;
 
         // Validate required fields
-        if (!notificationId || !deviceId || !packageName || !appName || !key) {
+        if (!uniqueId || !notificationId || !deviceId || !packageName || !appName || !key) {
             return res.status(400).json({
                 success: false,
-                message: 'Missing required fields: notificationId, deviceId, packageName, appName, key'
+                message: 'Missing required fields: uniqueId, notificationId, deviceId, packageName, appName, key'
             });
         }
 
         // Create notification data with only required fields
         const notificationData = {
+            uniqueId: uniqueId,
             notificationId: notificationId,
             deviceId: deviceId,
             packageName: packageName,
@@ -79,6 +81,7 @@ router.post('/', authenticateApiKey, async (req, res) => {
             message: 'Notification saved successfully',
             data: {
                 id: savedNotification._id,
+                uniqueId: savedNotification.uniqueId,
                 notificationId: savedNotification.notificationId,
                 deviceId: savedNotification.deviceId,
                 packageName: savedNotification.packageName,
