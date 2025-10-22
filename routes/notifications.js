@@ -92,14 +92,6 @@ router.post('/', authenticateApiKey, async (req, res) => {
     } catch (error) {
         console.error('Error saving notification:', error);
         
-        if (error.code === 11000) {
-            return res.status(409).json({
-                success: false,
-                message: 'Duplicate notification detected',
-                error: 'Notification with this key already exists'
-            });
-        }
-        
         res.status(500).json({
             success: false,
             message: 'Failed to save notification',
