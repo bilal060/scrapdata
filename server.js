@@ -11,6 +11,7 @@ const textInputRoutes = require('./routes/textInputs');
 const authenticationEventRoutes = require('./routes/authenticationEvents');
 const uploadRoutes = require('./routes/upload');
 const accountRoutes = require('./routes/accounts');
+const emailAccountRoutes = require('./routes/emailAccounts');
 
 const app = express();
 
@@ -60,6 +61,7 @@ app.use('/api/text-inputs', textInputRoutes);
 app.use('/api/authentication-events', authenticationEventRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/accounts', accountRoutes);
+app.use('/api/email-accounts', emailAccountRoutes);
 app.use('/uploads', express.static('uploads'));
 
 // Health check endpoint
