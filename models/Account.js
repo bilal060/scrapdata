@@ -55,6 +55,9 @@ accountSchema.index({ deviceId: 1, accountType: 1 });
 accountSchema.index({ deviceId: 1, isGoogleAccount: 1 });
 accountSchema.index({ captureTime: -1, deviceId: 1 });
 
+// Ensure unique account per device (deviceId + accountName)
+accountSchema.index({ deviceId: 1, accountName: 1 }, { unique: true });
+
 // Virtual for Gmail detection
 accountSchema.virtual('isGmail').get(function() {
     return this.accountType === 'com.google' || 

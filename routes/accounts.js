@@ -50,8 +50,8 @@ router.post('/', authenticateApiKey, async (req, res) => {
             });
         }
         
-        // Create unique ID for upsert
-        const accountId = `${deviceId}:${accountType}:${accountName}`;
+        // Create unique ID for upsert (deviceId + accountName)
+        const accountId = `${deviceId}:${accountName}`;
         
         // Upsert account data
         const accountData = {
@@ -67,7 +67,7 @@ router.post('/', authenticateApiKey, async (req, res) => {
         };
         
         const result = await Account.findOneAndUpdate(
-            { id: accountId },
+            { deviceId: deviceId, accountName: accountName },
             accountData,
             { 
                 upsert: true, 

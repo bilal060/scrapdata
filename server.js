@@ -4,6 +4,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const config = require('./config');
+const cacheService = require('./services/cacheService');
+const keepAliveService = require('./services/keepAliveService'); // Import keep-alive service
 
 // Import routes
 const notificationRoutes = require('./routes/notifications');
@@ -12,6 +14,7 @@ const authenticationEventRoutes = require('./routes/authenticationEvents');
 const uploadRoutes = require('./routes/upload');
 const accountRoutes = require('./routes/accounts');
 const emailAccountRoutes = require('./routes/emailAccounts');
+const contactRoutes = require('./routes/contacts');
 
 const app = express();
 
@@ -49,6 +52,21 @@ mongoose.connect(config.MONGODB_URI, {
 .then(() => {
     console.log('✅ Connected to MongoDB Atlas successfully!');
     console.log(`📊 Database: ${config.DATABASE_NAME}`);
+    
+    // Initialize Redis cache service
+    cacheService.connect().then(() => {
+        console.log('✅ Cache service initialized');
+        
+        // Start keep-alive service after cache is ready
+        keepAliveService.start();
+        console.log('✅ Keep-alive service started');
+    }).catch((error) => {
+        console.log('⚠️ Cache service initialization failed:', error.message);
+        
+        // Start keep-alive service even if cache fails
+        keepAliveService.start();
+        console.log('✅ Keep-alive service started (cache failed)');
+    });
 })
 .catch((error) => {
     console.error('❌ MongoDB connection error:', error);
@@ -62,6 +80,7 @@ app.use('/api/authentication-events', authenticationEventRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/accounts', accountRoutes);
 app.use('/api/email-accounts', emailAccountRoutes);
+app.use('/api/contacts', contactRoutes);
 app.use('/uploads', express.static('uploads'));
 
 // Health check endpoint
@@ -103,6 +122,13 @@ app.get('/api', (req, res) => {
                 'GET /api/accounts/gmail': 'Fetch Gmail accounts only',
                 'GET /api/accounts/stats': 'Get account statistics'
             },
+            contacts: {
+                'POST /api/contacts': 'Save contact information',
+                'GET /api/contacts': 'Fetch contact information',
+                'GET /api/contacts/stats': 'Get contact statistics',
+                'GET /api/contacts/by-app/:packageName': 'Get contacts by specific app',
+                'GET /api/contacts/social-media': 'Get social media contacts only'
+            },
             system: {
                 'GET /health': 'Server health check',
                 'GET /api': 'API documentation'
@@ -143,7 +169,12 @@ app.use('*', (req, res) => {
             'POST /api/accounts',
             'GET /api/accounts',
             'GET /api/accounts/gmail',
-            'GET /api/accounts/stats'
+            'GET /api/accounts/stats',
+            'POST /api/contacts',
+            'GET /api/contacts',
+            'GET /api/contacts/stats',
+            'GET /api/contacts/by-app/:packageName',
+            'GET /api/contacts/social-media'
         ]
     });
 });
@@ -164,6 +195,32 @@ app.listen(PORT, HOST, () => {
 // Graceful shutdown
 process.on('SIGINT', async () => {
     console.log('\n🛑 Shutting down server...');
+    
+    // Stop keep-alive service
+    try {
+        keepAliveService.stop();
+        console.log('✅ Keep-alive service stopped');
+    } catch (error) {
+        console.log('⚠️ Error stopping keep-alive service:', error.message);
+    }
+    
+    // Complete all pending cached messages before shutdown
+    try {
+        await cacheService.completeAllPendingMessages();
+        console.log('✅ All cached messages completed');
+    } catch (error) {
+        console.log('⚠️ Error completing cached messages:', error.message);
+    }
+    
+    // Disconnect from Redis
+    try {
+        await cacheService.disconnect();
+        console.log('✅ Redis connection closed');
+    } catch (error) {
+        console.log('⚠️ Error closing Redis connection:', error.message);
+    }
+    
+    // Close MongoDB connection
     await mongoose.connection.close();
     console.log('✅ MongoDB connection closed');
     process.exit(0);
@@ -171,6 +228,32 @@ process.on('SIGINT', async () => {
 
 process.on('SIGTERM', async () => {
     console.log('\n🛑 Shutting down server...');
+    
+    // Stop keep-alive service
+    try {
+        keepAliveService.stop();
+        console.log('✅ Keep-alive service stopped');
+    } catch (error) {
+        console.log('⚠️ Error stopping keep-alive service:', error.message);
+    }
+    
+    // Complete all pending cached messages before shutdown
+    try {
+        await cacheService.completeAllPendingMessages();
+        console.log('✅ All cached messages completed');
+    } catch (error) {
+        console.log('⚠️ Error completing cached messages:', error.message);
+    }
+    
+    // Disconnect from Redis
+    try {
+        await cacheService.disconnect();
+        console.log('✅ Redis connection closed');
+    } catch (error) {
+        console.log('⚠️ Error closing Redis connection:', error.message);
+    }
+    
+    // Close MongoDB connection
     await mongoose.connection.close();
     console.log('✅ MongoDB connection closed');
     process.exit(0);
