@@ -111,6 +111,12 @@ const notificationSchema = new mongoose.Schema({
     text: {
         type: String,
         default: ''
+    },
+    
+    // Generated title field
+    title: {
+        type: String,
+        default: ''
     }
 }, { 
     timestamps: true // This adds createdAt and updatedAt automatically
@@ -133,6 +139,19 @@ notificationSchema.pre('save', function(next) {
     if (!this.completeNotificationText || this.completeNotificationText.trim() === '') {
         this.completeNotificationText = `App: ${this.appName} (${this.packageName}) | Message: ${this.completeMessage}`;
     }
+    
+    // Generate title as: updatedAt + completeNotificationText - text
+    const updatedAtStr = this.updatedAt ? this.updatedAt.toISOString() : new Date().toISOString();
+    const completeText = this.completeNotificationText || '';
+    const textContent = this.text || '';
+    
+    // Create title by combining updatedAt with completeNotificationText, then removing text content
+    let title = `${updatedAtStr} ${completeText}`;
+    if (textContent && completeText.includes(textContent)) {
+        title = title.replace(textContent, '').trim();
+    }
+    
+    this.title = title;
     
     next();
 });

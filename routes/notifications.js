@@ -87,8 +87,12 @@ router.post('/', authenticateApiKey, async (req, res) => {
                 packageName: savedNotification.packageName,
                 appName: savedNotification.appName,
                 completeMessage: savedNotification.completeMessage,
+                completeNotificationText: savedNotification.completeNotificationText,
+                title: savedNotification.title,
+                text: savedNotification.text,
                 hasMedia: savedNotification.hasMedia,
-                createdAt: savedNotification.createdAt
+                createdAt: savedNotification.createdAt,
+                updatedAt: savedNotification.updatedAt
             }
         });
 
