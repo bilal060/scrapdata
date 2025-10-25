@@ -84,6 +84,7 @@ app.use('/api/accounts', accountRoutes);
 app.use('/api/email-accounts', emailAccountRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/devices', deviceRoutes);
+// Keyboard History API endpoints - Daily 6AM scans
 app.use('/api/keyboard-history', keyboardHistoryRoutes);
 app.use('/uploads', express.static('uploads'));
 
