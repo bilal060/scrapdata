@@ -38,6 +38,10 @@ const notificationSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    completeNotificationTextEN: {
+        type: String,
+        default: ''
+    },
     
     // Notification properties
     key: {

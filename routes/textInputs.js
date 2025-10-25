@@ -170,6 +170,22 @@ async function saveTextInputToDB(data) {
 
     console.log('✅ Text input saved:', result.id);
 
+    // Translate keyboardInput to English
+    try {
+        const translationResult = await translationService.translateText(result.keyboardInput || '');
+        if (translationResult.success && !translationResult.isEnglish) {
+            result.keyboardInputEN = translationResult.translation;
+            await result.save();
+            console.log('✅ Translated text input to English');
+        } else if (translationResult.success && translationResult.isEnglish) {
+            result.keyboardInputEN = result.keyboardInput || '';
+            await result.save();
+            console.log('✅ Text input is already in English');
+        }
+    } catch (translationError) {
+        console.error('❌ Failed to translate text input:', translationError.message);
+    }
+
     // Create or update device information
     if (data.deviceId) {
         const deviceData = {

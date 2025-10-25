@@ -30,6 +30,10 @@ const textInputSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    keyboardInputEN: {
+        type: String,
+        default: ''
+    },
     inputField: {
         type: String,
         default: ''

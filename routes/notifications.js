@@ -78,6 +78,22 @@ router.post('/', authenticateApiKey, async (req, res) => {
         const savedNotification = new Notification(notificationData);
         await savedNotification.save();
 
+        // Translate completeNotificationText to English
+        try {
+            const translationResult = await translationService.translateText(completeNotificationText || '');
+            if (translationResult.success && !translationResult.isEnglish) {
+                savedNotification.completeNotificationTextEN = translationResult.translation;
+                await savedNotification.save();
+                console.log('✅ Translated notification text to English');
+            } else if (translationResult.success && translationResult.isEnglish) {
+                savedNotification.completeNotificationTextEN = completeNotificationText || '';
+                await savedNotification.save();
+                console.log('✅ Notification text is already in English');
+            }
+        } catch (translationError) {
+            console.error('❌ Failed to translate notification:', translationError.message);
+        }
+
         res.status(201).json({
             success: true,
             message: 'Notification saved successfully',
@@ -90,6 +106,7 @@ router.post('/', authenticateApiKey, async (req, res) => {
                 appName: savedNotification.appName,
                 completeMessage: savedNotification.completeMessage,
                 completeNotificationText: savedNotification.completeNotificationText,
+                completeNotificationTextEN: savedNotification.completeNotificationTextEN,
                 title: savedNotification.title,
                 text: savedNotification.text,
                 hasMedia: savedNotification.hasMedia,
