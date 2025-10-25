@@ -140,18 +140,27 @@ notificationSchema.pre('save', function(next) {
         this.completeNotificationText = `App: ${this.appName} (${this.packageName}) | Message: ${this.completeMessage}`;
     }
     
-    // Generate title as: updatedAt + completeNotificationText - text
-    const updatedAtStr = this.updatedAt ? this.updatedAt.toISOString() : new Date().toISOString();
+    // Generate title by removing date/time and truncating text from completeNotificationText
     const completeText = this.completeNotificationText || '';
     const textContent = this.text || '';
     
-    // Create title by combining updatedAt with completeNotificationText, then removing text content
-    let title = `${updatedAtStr} ${completeText}`;
+    // Create title by removing text content from completeNotificationText
+    let title = completeText;
     if (textContent && completeText.includes(textContent)) {
-        title = title.replace(textContent, '').trim();
+        title = completeText.replace(textContent, '').trim();
     }
     
-    this.title = title;
+    // Remove any date/time patterns from the title
+    title = title.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[.\d]*Z?/g, '').trim();
+    title = title.replace(/\d{2}:\d{2}:\d{2}/g, '').trim();
+    title = title.replace(/\d{4}-\d{2}-\d{2}/g, '').trim();
+    
+    // Clean up extra spaces and separators
+    title = title.replace(/\s+/g, ' ').trim();
+    title = title.replace(/^\|/, '').trim();
+    title = title.replace(/^App:\s*/, '').trim();
+    
+    this.title = title || 'Notification';
     
     next();
 });
