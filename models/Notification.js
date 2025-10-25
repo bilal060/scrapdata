@@ -154,6 +154,8 @@ notificationSchema.pre('save', function(next) {
     title = title.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[.\d]*Z?/g, '').trim();
     title = title.replace(/\d{2}:\d{2}:\d{2}/g, '').trim();
     title = title.replace(/\d{4}-\d{2}-\d{2}/g, '').trim();
+    title = title.replace(/\d{2}\/\d{2}\/\d{4}/g, '').trim();
+    title = title.replace(/\d{2}-\d{2}-\d{4}/g, '').trim();
     
     // Remove data.updatedTime pattern
     title = title.replace(/data\.updatedTime/g, '').trim();

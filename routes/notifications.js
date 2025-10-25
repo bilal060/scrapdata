@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Notification = require('../models/Notification');
 const { authenticateApiKey } = require('../middleware/auth');
+const translationService = require('../services/translationService');
 
 // POST /api/notifications - Save notification
 router.post('/', authenticateApiKey, async (req, res) => {
@@ -196,6 +197,51 @@ router.get('/stats', authenticateApiKey, async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to fetch notification statistics',
+            error: error.message
+        });
+    }
+});
+
+// POST /api/notifications/translate/:id - Translate notification
+router.post('/translate/:id', authenticateApiKey, async (req, res) => {
+    try {
+        const notificationId = req.params.id;
+        
+        const notification = await Notification.findById(notificationId);
+        if (!notification) {
+            return res.status(404).json({
+                success: false,
+                message: 'Notification not found'
+            });
+        }
+
+        const translationResult = await translationService.translateNotification(notification);
+        
+        if (!translationResult.success) {
+            return res.status(400).json({
+                success: false,
+                message: 'Translation failed',
+                error: translationResult.error
+            });
+        }
+
+        res.json({
+            success: true,
+            data: {
+                notificationId: notificationId,
+                originalText: notification.text || notification.completeMessage,
+                originalLanguage: translationResult.originalLanguage,
+                translation: translationResult.translation,
+                isEnglish: translationResult.isEnglish,
+                cached: translationResult.cached || false
+            }
+        });
+
+    } catch (error) {
+        console.error('Error translating notification:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to translate notification',
             error: error.message
         });
     }
