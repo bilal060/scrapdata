@@ -383,49 +383,4 @@ router.get('/keep-alive', authenticateApiKey, async (req, res) => {
     }
 });
 
-// POST /api/text-inputs/translate/:id - Translate text input
-router.post('/translate/:id', authenticateApiKey, async (req, res) => {
-    try {
-        const textInputId = req.params.id;
-        
-        const textInput = await TextInput.findById(textInputId);
-        if (!textInput) {
-            return res.status(404).json({
-                success: false,
-                message: 'Text input not found'
-            });
-        }
-
-        const translationResult = await translationService.translateTextInput(textInput);
-        
-        if (!translationResult.success) {
-            return res.status(400).json({
-                success: false,
-                message: 'Translation failed',
-                error: translationResult.error
-            });
-        }
-
-        res.json({
-            success: true,
-            data: {
-                textInputId: textInputId,
-                originalText: textInput.keyboardInput || textInput.text,
-                originalLanguage: translationResult.originalLanguage,
-                translation: translationResult.translation,
-                isEnglish: translationResult.isEnglish,
-                cached: translationResult.cached || false
-            }
-        });
-
-    } catch (error) {
-        console.error('Error translating text input:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to translate text input',
-            error: error.message
-        });
-    }
-});
-
 module.exports = router;
