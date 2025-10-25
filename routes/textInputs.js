@@ -198,12 +198,16 @@ router.get('/', authenticateApiKey, async (req, res) => {
             .skip(parseInt(offset))
             .lean();
 
+        // Get total count for pagination
+        const totalCount = await TextInput.countDocuments(filter);
+
         // Get cache statistics
         const cacheStats = await cacheService.getCacheStats();
 
         res.status(200).json({
             success: true,
             count: textInputs.length,
+            totalCount: totalCount,
             cacheStats: cacheStats,
             textInputs: textInputs
         });
