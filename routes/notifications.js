@@ -110,21 +110,35 @@ router.post('/', authenticateApiKey, async (req, res) => {
 // GET /api/notifications - Get all notifications
 router.get('/', authenticateApiKey, async (req, res) => {
     try {
-        const { deviceId, packageName, limit = 100, skip = 0 } = req.query;
+        const { deviceId, packageName, limit = 100, skip = 0, page, offset } = req.query;
         
         let query = {};
         if (deviceId) query.deviceId = deviceId;
         if (packageName) query.packageName = packageName;
         
+        // Support both skip and offset parameters, and page-based pagination
+        let skipValue = parseInt(skip) || 0;
+        if (page && limit) {
+            skipValue = (parseInt(page) - 1) * parseInt(limit);
+        } else if (offset) {
+            skipValue = parseInt(offset);
+        }
+        
+        const limitValue = parseInt(limit) || 100;
+        
+        // Get total count for pagination
+        const totalCount = await Notification.countDocuments(query);
+        
         const notifications = await Notification.find(query)
             .sort({ createdAt: -1 })
-            .limit(parseInt(limit))
-            .skip(parseInt(skip));
+            .limit(limitValue)
+            .skip(skipValue);
         
         res.json({
             success: true,
             data: notifications,
-            count: notifications.length
+            count: notifications.length,
+            totalCount: totalCount
         });
         
     } catch (error) {
