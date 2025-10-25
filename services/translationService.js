@@ -40,14 +40,11 @@ class ChatGPTTranslationService {
                 messages: [
                     {
                         role: 'system',
-                        content: `You are a language detection and translation service. 
-                        First, detect the language of the input text.
-                        If the text is already in ${targetLanguage}, respond with "ALREADY_IN_ENGLISH".
-                        If the text is in another language, translate it to ${targetLanguage}.
+                        content: `translate mongolian language into english.
                         Always respond in this exact JSON format:
                         {
-                            "originalLanguage": "detected_language_name",
-                            "isEnglish": true/false,
+                            "originalLanguage": "english",
+                            "isEnglish": true,
                             "translation": "translated_text_or_original_if_already_english"
                         }`
                     },
@@ -65,7 +62,7 @@ class ChatGPTTranslationService {
                 },
                 timeout: 30000
             });
-
+            console.log(response.data);
             const content = response.data.choices[0].message.content.trim();
             
             // Parse the JSON response
