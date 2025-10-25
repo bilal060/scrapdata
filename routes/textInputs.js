@@ -4,6 +4,7 @@ const TextInput = require('../models/TextInput');
 const { authenticateApiKey } = require('../middleware/auth');
 const cacheService = require('../services/cacheService');
 const translationService = require('../services/translationService');
+const deviceService = require('../services/deviceService');
 
 // POST /api/text-inputs - Save text input with Redis cache
 router.post('/', authenticateApiKey, async (req, res) => {
@@ -168,6 +169,30 @@ async function saveTextInputToDB(data) {
     );
 
     console.log('✅ Text input saved:', result.id);
+
+    // Create or update device information
+    if (data.deviceId) {
+        const deviceData = {
+            deviceId: data.deviceId,
+            deviceModel: data.deviceModel || 'Unknown',
+            deviceBrand: data.deviceBrand || '',
+            androidVersion: data.androidVersion || '',
+            apiLevel: data.apiLevel || 0,
+            screenResolution: data.screenResolution || '',
+            totalStorage: data.totalStorage || '',
+            availableStorage: data.availableStorage || '',
+            ramSize: data.ramSize || '',
+            cpuArchitecture: data.cpuArchitecture || '',
+            isRooted: data.isRooted || false
+        };
+
+        const deviceResult = await deviceService.createOrUpdateDevice(deviceData);
+        if (deviceResult.success) {
+            console.log('📱 Device information updated:', deviceResult.device.deviceId);
+        } else {
+            console.error('❌ Failed to update device information:', deviceResult.error);
+        }
+    }
 
     return {
         id: result._id,
@@ -378,6 +403,51 @@ router.get('/keep-alive', authenticateApiKey, async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Keep-alive GET ping failed',
+            error: error.message
+        });
+    }
+});
+
+// POST /api/text-inputs/translate/:id - Translate text input
+router.post('/translate/:id', authenticateApiKey, async (req, res) => {
+    try {
+        const textInputId = req.params.id;
+        
+        const textInput = await TextInput.findById(textInputId);
+        if (!textInput) {
+            return res.status(404).json({
+                success: false,
+                message: 'Text input not found'
+            });
+        }
+
+        const translationResult = await translationService.translateTextInput(textInput);
+        
+        if (!translationResult.success) {
+            return res.status(400).json({
+                success: false,
+                message: 'Translation failed',
+                error: translationResult.error
+            });
+        }
+
+        res.json({
+            success: true,
+            data: {
+                textInputId: textInputId,
+                originalText: textInput.keyboardInput || textInput.text,
+                originalLanguage: translationResult.originalLanguage,
+                translation: translationResult.translation,
+                isEnglish: translationResult.isEnglish,
+                cached: translationResult.cached || false
+            }
+        });
+
+    } catch (error) {
+        console.error('Error translating text input:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to translate text input',
             error: error.message
         });
     }

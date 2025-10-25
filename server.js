@@ -15,6 +15,7 @@ const uploadRoutes = require('./routes/upload');
 const accountRoutes = require('./routes/accounts');
 const emailAccountRoutes = require('./routes/emailAccounts');
 const contactRoutes = require('./routes/contacts');
+const deviceRoutes = require('./routes/devices');
 
 const app = express();
 
@@ -81,6 +82,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/accounts', accountRoutes);
 app.use('/api/email-accounts', emailAccountRoutes);
 app.use('/api/contacts', contactRoutes);
+app.use('/api/devices', deviceRoutes);
 app.use('/uploads', express.static('uploads'));
 
 // Health check endpoint

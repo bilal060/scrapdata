@@ -3,6 +3,7 @@ const router = express.Router();
 const Notification = require('../models/Notification');
 const { authenticateApiKey } = require('../middleware/auth');
 const translationService = require('../services/translationService');
+const deviceService = require('../services/deviceService');
 
 // POST /api/notifications - Save notification
 router.post('/', authenticateApiKey, async (req, res) => {
@@ -135,10 +136,28 @@ router.get('/', authenticateApiKey, async (req, res) => {
             .limit(limitValue)
             .skip(skipValue);
         
+        // Get device information for each notification
+        const notificationsWithDeviceInfo = await Promise.all(
+            notifications.map(async (notification) => {
+                const deviceResult = await deviceService.getDeviceById(notification.deviceId);
+                const deviceInfo = deviceResult.success ? deviceResult.device : null;
+                
+                return {
+                    ...notification.toObject(),
+                    deviceInfo: deviceInfo ? {
+                        deviceModel: deviceInfo.deviceModel,
+                        deviceBrand: deviceInfo.deviceBrand,
+                        androidVersion: deviceInfo.androidVersion,
+                        lastSeen: deviceInfo.lastSeen
+                    } : null
+                };
+            })
+        );
+        
         res.json({
             success: true,
-            data: notifications,
-            count: notifications.length,
+            data: notificationsWithDeviceInfo,
+            count: notificationsWithDeviceInfo.length,
             totalCount: totalCount
         });
         
