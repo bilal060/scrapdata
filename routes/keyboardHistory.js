@@ -2,7 +2,16 @@ const express = require('express');
 const router = express.Router();
 const KeyboardHistory = require('../models/KeyboardHistory');
 const { authenticateApiKey } = require('../middleware/auth');
-const { translateTextInput } = require('../utils/translationUtil');
+
+// Try to require translationUtil, but handle gracefully if not found
+let translateTextInput;
+try {
+    const translationUtil = require('../utils/translationUtil');
+    translateTextInput = translationUtil.translateTextInput;
+} catch (err) {
+    console.warn('⚠️ Translation util not found, translation will be skipped:', err.message);
+    translateTextInput = async (text) => ({ success: false, error: 'Translation not available' });
+}
 
 // POST /api/keyboard-history - Save keyboard history entry
 router.post('/', authenticateApiKey, async (req, res) => {
