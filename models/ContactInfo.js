@@ -27,8 +27,7 @@ const ContactInfoSchema = new mongoose.Schema({
         index: true
     },
     contactName: {
-        type: String,
-        index: true
+        type: String
     },
     
     // Contact Details
@@ -172,7 +171,6 @@ const ContactInfoSchema = new mongoose.Schema({
 // Indexes for better performance
 ContactInfoSchema.index({ deviceId: 1, timestamp: -1 });
 ContactInfoSchema.index({ packageName: 1, contactType: 1 });
-ContactInfoSchema.index({ contactName: 1 });
 ContactInfoSchema.index({ captureTime: -1 });
 
 // Ensure unique contact per device (deviceId + contactName)

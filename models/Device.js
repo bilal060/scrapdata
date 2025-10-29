@@ -75,7 +75,7 @@ const deviceSchema = new mongoose.Schema({
 });
 
 // Create indexes for better performance
-deviceSchema.index({ deviceId: 1 });
+// 'deviceId' is already unique, no need to duplicate index
 deviceSchema.index({ deviceModel: 1 });
 deviceSchema.index({ lastSeen: -1 });
 deviceSchema.index({ createdAt: -1 });
