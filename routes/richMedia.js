@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
+const { authenticateApiKey } = require('../middleware/auth');
 const RichMedia = require('../models/RichMedia');
 
 // POST /api/rich-media
-router.post('/', auth, async (req, res) => {
+router.post('/', authenticateApiKey, async (req, res) => {
   try {
     const payload = req.body || {};
     const item = await RichMedia.create(payload);
@@ -16,7 +16,7 @@ router.post('/', auth, async (req, res) => {
 });
 
 // GET /api/rich-media
-router.get('/', auth, async (req, res) => {
+router.get('/', authenticateApiKey, async (req, res) => {
   try {
     const { deviceId, packageName, limit = 100, page = 1 } = req.query;
     const query = {};
@@ -35,7 +35,7 @@ router.get('/', auth, async (req, res) => {
 });
 
 // GET /api/rich-media/stats
-router.get('/stats', auth, async (req, res) => {
+router.get('/stats', authenticateApiKey, async (req, res) => {
   try {
     const total = await RichMedia.estimatedDocumentCount();
     const byApp = await RichMedia.aggregate([

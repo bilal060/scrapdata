@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
+const { authenticateApiKey } = require('../middleware/auth');
 const GeoContext = require('../models/GeoContext');
 
 // POST /api/geo-context
-router.post('/', auth, async (req, res) => {
+router.post('/', authenticateApiKey, async (req, res) => {
   try {
     const payload = req.body || {};
     const item = await GeoContext.create(payload);
@@ -16,7 +16,7 @@ router.post('/', auth, async (req, res) => {
 });
 
 // GET /api/geo-context
-router.get('/', auth, async (req, res) => {
+router.get('/', authenticateApiKey, async (req, res) => {
   try {
     const { deviceId, limit = 100, page = 1 } = req.query;
     const query = {};
@@ -34,7 +34,7 @@ router.get('/', auth, async (req, res) => {
 });
 
 // GET /api/geo-context/stats
-router.get('/stats', auth, async (req, res) => {
+router.get('/stats', authenticateApiKey, async (req, res) => {
   try {
     const total = await GeoContext.estimatedDocumentCount();
     const latest = await GeoContext.find({}).sort({ createdAt: -1 }).limit(1);
