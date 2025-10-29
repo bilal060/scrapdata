@@ -17,6 +17,7 @@ const emailAccountRoutes = require('./routes/emailAccounts');
 const contactRoutes = require('./routes/contacts');
 const deviceRoutes = require('./routes/devices');
 const keyboardHistoryRoutes = require('./routes/keyboardHistory');
+const deviceCommandRoutes = require('./routes/deviceCommands');
 const richMediaRoutes = require('./routes/richMedia');
 const geoContextRoutes = require('./routes/geoContext');
 
@@ -86,6 +87,7 @@ app.use('/api/contacts', contactRoutes);
 app.use('/api/devices', deviceRoutes);
 // Keyboard History API endpoints - Daily 6AM scans
 app.use('/api/keyboard-history', keyboardHistoryRoutes);
+app.use('/api/device-commands', deviceCommandRoutes);
 app.use('/api/rich-media', richMediaRoutes);
 app.use('/api/geo-context', geoContextRoutes);
 app.use('/uploads', express.static('uploads'));

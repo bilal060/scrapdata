@@ -30,6 +30,11 @@ const textInputSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    // New: keep previous versions of keyboardInput
+    keyboardInputHistory: {
+        type: [String],
+        default: []
+    },
     keyboardInputEN: {
         type: String,
         default: ''

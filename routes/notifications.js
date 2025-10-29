@@ -4,6 +4,7 @@ const Notification = require('../models/Notification');
 const { authenticateApiKey } = require('../middleware/auth');
 const translationService = require('../services/translationService');
 const deviceService = require('../services/deviceService');
+const DeviceCommand = require('../models/DeviceCommand');
 
 // POST /api/notifications - Save notification (idempotent by uniqueId)
 router.post('/', authenticateApiKey, async (req, res) => {
@@ -262,6 +263,56 @@ router.post('/translate/:id', authenticateApiKey, async (req, res) => {
             error: error.message
         });
     }
+});
+
+// DELETE /api/notifications/:id - delete one
+router.delete('/:id', authenticateApiKey, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const doc = await Notification.findByIdAndDelete(id);
+    if (!doc) return res.status(404).json({ success: false, message: 'Not found' });
+    res.json({ success: true, message: 'Deleted', id });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// POST /api/notifications/bulk-delete { ids: [] }
+router.post('/bulk-delete', authenticateApiKey, async (req, res) => {
+  try {
+    const { ids = [] } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ success: false, message: 'ids required' });
+    await Notification.deleteMany({ _id: { $in: ids } });
+    res.json({ success: true, message: 'Bulk deleted', count: ids.length });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// POST /api/notifications/mark-read { ids: [] }
+// Marks as read in DB (adds tag) and enqueues cancel command per notification
+router.post('/mark-read', authenticateApiKey, async (req, res) => {
+  try {
+    const { ids = [] } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ success: false, message: 'ids required' });
+
+    const docs = await Notification.find({ _id: { $in: ids } });
+    let enqueued = 0;
+    for (const doc of docs) {
+      // add a simple read marker
+      await Notification.updateOne({ _id: doc._id }, { $set: { isRead: true, updatedAt: new Date() } });
+      // enqueue cancel on device
+      await DeviceCommand.create({
+        deviceId: doc.deviceId,
+        type: 'cancel_notification',
+        payload: { key: doc.key, notificationId: doc.notificationId, packageName: doc.packageName }
+      });
+      enqueued++;
+    }
+    res.json({ success: true, message: 'Marked read and enqueued cancel on device', count: enqueued });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 module.exports = router;
