@@ -2,13 +2,16 @@ const axios = require('axios');
 
 class ChatGPTTranslationService {
     constructor() {
-        this.apiKey = process.env.OPENAI_API_KEY;
-        this.apiUrl = 'https://api.openai.com/v1/chat/completions';
+        // First try GROQ_API_KEY, then fallback to OPENAI_API_KEY
+        this.apiKey = process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY;
+        this.apiUrl = 'https://api.groq.com/openai/v1/chat/completions'; // Groq API endpoint
         this.cache = new Map(); // Simple in-memory cache
         this.cacheTimeout = 24 * 60 * 60 * 1000; // 24 hours
         
         if (!this.apiKey) {
-            console.warn('⚠️ OPENAI_API_KEY environment variable not set. Translation service will not work.');
+            console.warn('⚠️ GROQ_API_KEY or OPENAI_API_KEY environment variable not set. Translation service will not work.');
+        } else {
+            console.log('✅ Translation service configured with API key');
         }
     }
 
@@ -18,7 +21,16 @@ class ChatGPTTranslationService {
         }
 
         if (!this.apiKey) {
-            return { success: false, error: 'OpenAI API key not configured' };
+            console.warn('⚠️ API key not configured. Returning original text as English.');
+            // Return a success response with the original text marked as English
+            return {
+                success: true,
+                translation: text,
+                originalLanguage: 'Unknown',
+                isEnglish: true,
+                cached: false,
+                skipped: true
+            };
         }
 
         // Check cache first
@@ -36,25 +48,25 @@ class ChatGPTTranslationService {
 
         try {
             const response = await axios.post(this.apiUrl, {
-                model: 'gpt-3.5-turbo',
+                model: 'llama-3.1-8b-instant', // Groq model
                 messages: [
                     {
                         role: 'system',
-                        content: `translate mongolian language into english.
+                        content: `You are a translation assistant. Translate the given text into proper English.
                         Always respond in this exact JSON format:
                         {
-                            "originalLanguage": "english",
-                            "isEnglish": true,
+                            "originalLanguage": "detected_language",
+                            "isEnglish": true/false,
                             "translation": "translated_text_or_original_if_already_english"
                         }`
                     },
                     {
                         role: 'user',
-                        content: text
+                        content: `Translate this text to English: "${text}"`
                     }
                 ],
-                max_tokens: 1000,
-                temperature: 0.3
+                temperature: 0.1,
+                max_tokens: 1000
             }, {
                 headers: {
                     'Authorization': `Bearer ${this.apiKey}`,
