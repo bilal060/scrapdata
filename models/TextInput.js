@@ -53,6 +53,11 @@ const textInputSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    // New: normalized chat name (group/chat title, contact name/number)
+    chatName: {
+        type: String,
+        default: ''
+    },
     fieldHint: {
         type: String,
         default: ''
