@@ -42,6 +42,11 @@ const notificationSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    // New: extracted messages list for group summaries / messaging notifications
+    messages: {
+        type: [String],
+        default: []
+    },
     
     // Notification properties
     key: {

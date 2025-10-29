@@ -29,6 +29,7 @@ function extractFromText(text = '') {
 router.post('/', authenticateApiKey, async (req, res) => {
   try {
     const payload = req.body || {};
+    console.log('📩 Received rich media payload:', JSON.stringify(payload, null, 2));
 
     // If most fields are empty, try to enrich from related source
     const emptyArrays = [
