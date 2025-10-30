@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 const config = require('./config');
 const cacheService = require('./services/cacheService');
 const keepAliveService = require('./services/keepAliveService'); // Import keep-alive service
+const ensureDevice = require('./middleware/ensureDevice');
 
 // Import routes
 const notificationRoutes = require('./routes/notifications');
@@ -48,6 +49,9 @@ app.use(cors({
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Device ensure middleware for all POST API calls
+app.use('/api', ensureDevice);
 
 // MongoDB connection
 mongoose.connect(config.MONGODB_URI, {
