@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Account = require('../models/Account');
 const { authenticateApiKey } = require('../middleware/auth');
+const deviceService = require('../services/deviceService');
 
 // GET /api/accounts - Get all accounts
 router.get('/', authenticateApiKey, async (req, res) => {
@@ -66,8 +67,11 @@ router.post('/', authenticateApiKey, async (req, res) => {
             deviceId
         };
         
+        const query = { deviceId: deviceId, accountName: accountName };
+        const existingAccount = await Account.findOne(query).lean();
+
         const result = await Account.findOneAndUpdate(
-            { deviceId: deviceId, accountName: accountName },
+            query,
             accountData,
             { 
                 upsert: true, 
@@ -78,6 +82,15 @@ router.post('/', authenticateApiKey, async (req, res) => {
         
         console.log(`✅ Account saved/updated: ${accountName} (${accountType})`);
         
+        if (!existingAccount) {
+            deviceService.incrementDeviceStats(
+                deviceId,
+                { totalAccounts: 1 }
+            ).catch((error) => {
+                console.error('❌ Failed to increment device account count:', error.message);
+            });
+        }
+
         res.json({
             success: true,
             message: 'Account saved successfully',

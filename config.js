@@ -1,13 +1,13 @@
 module.exports = {
-    // MongoDB Atlas Connection
-    MONGODB_URI: 'mongodb+srv://dbuser:Bil%40l112@cluster0.ey6gj6g.mongodb.net/notifications?retryWrites=true&w=majority',
-    DATABASE_NAME: 'android_db',
+    // MongoDB Connection
+    MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017',
+    DATABASE_NAME: process.env.MONGODB_DB_NAME || 'android_db',
     
     // Server Configuration
     PORT: process.env.PORT || 8888,
-    HOST: '0.0.0.0', // Listen on all network interfaces
+    HOST: process.env.HOST || '0.0.0.0',
     NODE_ENV: process.env.NODE_ENV || 'development',
     
     // API Security
-    API_KEY: 'android-notification-capture-2024-secure-key-v2'
+    API_KEY: process.env.API_KEY || 'android-notification-capture-2024-secure-key-v2'
 };

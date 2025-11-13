@@ -100,6 +100,10 @@ const notificationSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    messages: {
+        type: [String],
+        default: []
+    },
     
     // Timing information
     postTime: {
@@ -134,6 +138,10 @@ notificationSchema.index({ hasMedia: 1 });
 
 // Pre-save middleware to ensure required fields
 notificationSchema.pre('save', function(next) {
+    if (!Array.isArray(this.messages)) {
+        this.messages = [];
+    }
+    
     // Ensure completeMessage is not empty
     if (!this.completeMessage || this.completeMessage.trim() === '') {
         this.completeMessage = this.text || 'No message content';

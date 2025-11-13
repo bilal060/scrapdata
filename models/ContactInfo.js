@@ -7,15 +7,13 @@ const ContactInfoSchema = new mongoose.Schema({
     },
     deviceId: {
         type: String,
-        required: true,
-        index: true
+        required: true
     },
     
     // Contact Information
     packageName: {
         type: String,
-        required: true,
-        index: true
+        required: true
     },
     appName: {
         type: String,
@@ -23,12 +21,10 @@ const ContactInfoSchema = new mongoose.Schema({
     },
     contactType: {
         type: String,
-        required: true,
-        index: true
+        required: true
     },
     contactName: {
-        type: String,
-        index: true
+        type: String
     },
     
     // Contact Details

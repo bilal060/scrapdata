@@ -1,5 +1,6 @@
 const express = require('express');
 const ContactInfo = require('../models/ContactInfo');
+const deviceService = require('../services/deviceService');
 const router = express.Router();
 
 // Middleware to verify API key
@@ -14,6 +15,36 @@ const verifyApiKey = (req, res, next) => {
         });
     }
     next();
+};
+
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const buildSearchConditions = (search) => {
+    if (!search || typeof search !== 'string') return [];
+    const tokens = search.split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return [];
+
+    const fields = [
+        'contactName',
+        'packageName',
+        'appName',
+        'deviceId',
+        'phoneNumbers',
+        'emailAddresses',
+        'usernames',
+        'sourceText',
+        'socialMediaPlatform'
+    ];
+
+    const conditions = [];
+    tokens.forEach((token) => {
+        const regex = new RegExp(escapeRegExp(token), 'i');
+        fields.forEach((field) => {
+            conditions.push({ [field]: regex });
+        });
+    });
+
+    return conditions;
 };
 
 // Apply API key verification to all routes
@@ -37,12 +68,16 @@ router.post('/', async (req, res) => {
             contactData.contactName = contactData.contactType || 'Unknown Contact';
         }
 
+        const query = {
+            deviceId: contactData.deviceId,
+            contactName: contactData.contactName
+        };
+
+        const existingContact = await ContactInfo.findOne(query).lean();
+
         // Use upsert to prevent duplicates based on deviceId + contactName
         const contactInfo = await ContactInfo.findOneAndUpdate(
-            { 
-                deviceId: contactData.deviceId, 
-                contactName: contactData.contactName 
-            },
+            query,
             contactData,
             { 
                 upsert: true, 
@@ -52,6 +87,15 @@ router.post('/', async (req, res) => {
         );
 
         console.log(`✅ Contact info saved/updated: ${contactData.contactName} from ${contactData.appName}`);
+
+        if (!existingContact) {
+            deviceService.incrementDeviceStats(
+                contactData.deviceId,
+                { totalContacts: 1 }
+            ).catch((error) => {
+                console.error('❌ Failed to increment device contact count:', error.message);
+            });
+        }
 
         res.status(201).json({
             success: true,
@@ -93,43 +137,48 @@ router.get('/', async (req, res) => {
             packageName,
             contactType,
             contactName,
+            search,
             page = 1,
             limit = 50,
             sortBy = 'timestamp',
             sortOrder = 'desc'
         } = req.query;
 
-        // Build query
         const query = {};
         if (deviceId) query.deviceId = deviceId;
         if (packageName) query.packageName = packageName;
         if (contactType) query.contactType = contactType;
         if (contactName) query.contactName = new RegExp(contactName, 'i');
 
-        // Build sort
+        const searchConditions = buildSearchConditions(search);
+        if (searchConditions.length > 0) {
+            query.$or = searchConditions;
+        }
+
         const sort = {};
         sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
-        // Calculate pagination
-        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const pageNumber = parseInt(page, 10) || 1;
+        const limitNumber = parseInt(limit, 10) || 50;
+        const skip = (pageNumber - 1) * limitNumber;
 
-        // Execute query
-        const contacts = await ContactInfo.find(query)
-            .sort(sort)
-            .skip(skip)
-            .limit(parseInt(limit))
-            .lean();
-
-        const total = await ContactInfo.countDocuments(query);
-        const totalPages = Math.ceil(total / parseInt(limit));
+        const [contacts, total] = await Promise.all([
+            ContactInfo.find(query)
+                .sort(sort)
+                .skip(skip)
+                .limit(limitNumber)
+                .lean(),
+            ContactInfo.countDocuments(query)
+        ]);
+        const totalPages = Math.ceil(total / limitNumber);
 
         res.json({
             success: true,
             data: {
                 contacts,
                 pagination: {
-                    page: parseInt(page),
-                    limit: parseInt(limit),
+                    page: pageNumber,
+                    limit: limitNumber,
                     total,
                     pages: totalPages
                 }
@@ -273,6 +322,33 @@ router.get('/social-media', async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to fetch social media contacts',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+});
+
+// GET /api/contacts/metadata - Distinct filter values
+router.get('/metadata', async (_req, res) => {
+    try {
+        const [devices, packages, contactTypes] = await Promise.all([
+            ContactInfo.distinct('deviceId'),
+            ContactInfo.distinct('packageName'),
+            ContactInfo.distinct('contactType')
+        ]);
+
+        res.json({
+            success: true,
+            data: {
+                devices: devices.filter(Boolean).sort(),
+                packages: packages.filter(Boolean).sort(),
+                contactTypes: contactTypes.filter(Boolean).sort()
+            }
+        });
+    } catch (error) {
+        console.error('❌ Error fetching contact metadata:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch contact metadata',
             error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
         });
     }

@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -16,6 +17,7 @@ const accountRoutes = require('./routes/accounts');
 const emailAccountRoutes = require('./routes/emailAccounts');
 const contactRoutes = require('./routes/contacts');
 const deviceRoutes = require('./routes/devices');
+const deviceCommandRoutes = require('./routes/deviceCommands');
 
 const app = express();
 
@@ -83,6 +85,7 @@ app.use('/api/accounts', accountRoutes);
 app.use('/api/email-accounts', emailAccountRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/devices', deviceRoutes);
+app.use('/api/device-commands', deviceCommandRoutes);
 app.use('/uploads', express.static('uploads'));
 
 // Health check endpoint

@@ -4,18 +4,15 @@ const accountSchema = new mongoose.Schema({
     id: {
         type: String,
         required: true,
-        unique: true,
-        index: true
+        unique: true
     },
     accountName: {
         type: String,
-        required: true,
-        index: true
+        required: true
     },
     accountType: {
         type: String,
-        required: true,
-        index: true
+        required: true
     },
     accountTypeDisplayName: {
         type: String,
@@ -23,28 +20,23 @@ const accountSchema = new mongoose.Schema({
     },
     isGoogleAccount: {
         type: Boolean,
-        default: false,
-        index: true
+        default: false
     },
     isMicrosoftAccount: {
         type: Boolean,
-        default: false,
-        index: true
+        default: false
     },
     isSocialAccount: {
         type: Boolean,
-        default: false,
-        index: true
+        default: false
     },
     captureTime: {
         type: Date,
-        default: Date.now,
-        index: true
+        default: Date.now
     },
     deviceId: {
         type: String,
-        required: true,
-        index: true
+        required: true
     }
 }, {
     timestamps: true

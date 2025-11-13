@@ -32,6 +32,36 @@ router.get('/', authenticateApiKey, async (req, res) => {
     }
 });
 
+// POST /api/devices/:deviceId/heartbeat - Update capture health and heartbeat
+router.post('/:deviceId/heartbeat', authenticateApiKey, async (req, res) => {
+    try {
+        const { deviceId } = req.params;
+        const { captureStatus, metadata } = req.body;
+
+        const result = await deviceService.updateCaptureHealth(deviceId, captureStatus, metadata);
+
+        if (!result.success) {
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to update capture health',
+                error: result.error
+            });
+        }
+
+        res.json({
+            success: true,
+            data: result.device
+        });
+    } catch (error) {
+        console.error('❌ Error updating capture health:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update capture health',
+            error: error.message
+        });
+    }
+});
+
 // GET /api/devices/stats - Get device statistics
 router.get('/stats', authenticateApiKey, async (req, res) => {
     try {

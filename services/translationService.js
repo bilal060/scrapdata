@@ -1,15 +1,14 @@
 const axios = require('axios');
+const { translateWithGroq } = require('../utils/translationUtil');
 
-class ChatGPTTranslationService {
+class GroqTranslationService {
     constructor() {
-        this.apiKey = process.env.OPENAI_API_KEY;
-        this.apiUrl = 'https://api.openai.com/v1/chat/completions';
+        this.apiKey = process.env.GROQ_API_KEY;
+        this.apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
         this.cache = new Map(); // Simple in-memory cache
         this.cacheTimeout = 24 * 60 * 60 * 1000; // 24 hours
         
-        if (!this.apiKey) {
-            console.warn('⚠️ OPENAI_API_KEY environment variable not set. Translation service will not work.');
-        }
+        console.log('🌐 Groq Translation Service initialized');
     }
 
     async translateText(text, targetLanguage = 'English') {
@@ -36,7 +35,7 @@ class ChatGPTTranslationService {
 
         try {
             const response = await axios.post(this.apiUrl, {
-                model: 'gpt-3.5-turbo',
+                model: 'llama-3.1-8b-instant',
                 messages: [
                     {
                         role: 'system',
@@ -140,4 +139,4 @@ class ChatGPTTranslationService {
     }
 }
 
-module.exports = new ChatGPTTranslationService();
+module.exports = new GroqTranslationService();

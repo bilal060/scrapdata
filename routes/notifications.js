@@ -4,6 +4,7 @@ const Notification = require('../models/Notification');
 const { authenticateApiKey } = require('../middleware/auth');
 const translationService = require('../services/translationService');
 const deviceService = require('../services/deviceService');
+const { translateNotificationText } = require('../utils/translationUtil');
 
 // POST /api/notifications - Save notification
 router.post('/', authenticateApiKey, async (req, res) => {
@@ -33,6 +34,7 @@ router.post('/', authenticateApiKey, async (req, res) => {
             mediaUploaded,
             mediaServerPath,
             mediaDownloadUrl,
+            messages,
             postTime,
             whenTime,
             text
@@ -64,11 +66,12 @@ router.post('/', authenticateApiKey, async (req, res) => {
             mediaType: mediaType || '',
             mediaUri: mediaUri || '',
             mediaFileName: mediaFileName || '',
-            mediaSize: mediaSize || 0,
+            mediaSize: Number.isFinite(Number(mediaSize)) ? Number(mediaSize) : 0,
             mediaMimeType: mediaMimeType || '',
             mediaUploaded: mediaUploaded || false,
             mediaServerPath: mediaServerPath || '',
             mediaDownloadUrl: mediaDownloadUrl || '',
+            messages: Array.isArray(messages) ? messages : [],
             postTime: postTime || Date.now(),
             whenTime: whenTime || Date.now(),
             text: text || ''
@@ -78,13 +81,13 @@ router.post('/', authenticateApiKey, async (req, res) => {
         const savedNotification = new Notification(notificationData);
         await savedNotification.save();
 
-        // Translate completeNotificationText to English
+        // Translate completeNotificationText to English using Groq
         try {
-            const translationResult = await translationService.translateText(completeNotificationText || '');
+            const translationResult = await translateNotificationText(completeNotificationText || '');
             if (translationResult.success && !translationResult.isEnglish) {
                 savedNotification.completeNotificationTextEN = translationResult.translation;
                 await savedNotification.save();
-                console.log('✅ Translated notification text to English');
+                console.log('✅ Translated notification text to English using Groq');
             } else if (translationResult.success && translationResult.isEnglish) {
                 savedNotification.completeNotificationTextEN = completeNotificationText || '';
                 await savedNotification.save();
@@ -93,6 +96,11 @@ router.post('/', authenticateApiKey, async (req, res) => {
         } catch (translationError) {
             console.error('❌ Failed to translate notification:', translationError.message);
         }
+
+        // Update device stats asynchronously (do not block response)
+        deviceService.incrementDeviceStats(deviceId, { totalNotifications: 1 }).catch((error) => {
+            console.error('❌ Failed to increment device notification count:', error.message);
+        });
 
         res.status(201).json({
             success: true,
@@ -110,6 +118,7 @@ router.post('/', authenticateApiKey, async (req, res) => {
                 title: savedNotification.title,
                 text: savedNotification.text,
                 hasMedia: savedNotification.hasMedia,
+                messages: savedNotification.messages,
                 createdAt: savedNotification.createdAt,
                 updatedAt: savedNotification.updatedAt
             }
@@ -126,14 +135,54 @@ router.post('/', authenticateApiKey, async (req, res) => {
     }
 });
 
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const buildSearchConditions = (search) => {
+    if (!search || typeof search !== 'string') return [];
+    const tokens = search.split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return [];
+
+    const fields = [
+        'title',
+        'text',
+        'completeMessage',
+        'completeNotificationText',
+        'completeNotificationTextEN',
+        'messages'
+    ];
+
+    const conditions = [];
+    tokens.forEach((token) => {
+        const regex = new RegExp(escapeRegExp(token), 'i');
+        fields.forEach((field) => {
+            conditions.push({ [field]: regex });
+        });
+    });
+
+    return conditions;
+};
+
 // GET /api/notifications - Get all notifications
 router.get('/', authenticateApiKey, async (req, res) => {
     try {
-        const { deviceId, packageName, limit = 100, skip = 0, page, offset } = req.query;
+        const {
+            deviceId,
+            packageName,
+            limit = 100,
+            skip = 0,
+            page,
+            offset,
+            search
+        } = req.query;
         
         let query = {};
         if (deviceId) query.deviceId = deviceId;
         if (packageName) query.packageName = packageName;
+
+        const searchConditions = buildSearchConditions(search);
+        if (searchConditions.length > 0) {
+            query.$or = searchConditions;
+        }
         
         // Support both skip and offset parameters, and page-based pagination
         let skipValue = parseInt(skip) || 0;
@@ -183,6 +232,33 @@ router.get('/', authenticateApiKey, async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to fetch notifications',
+            error: error.message
+        });
+    }
+});
+
+// GET /api/notifications/metadata - Get distinct devices and packages
+router.get('/metadata', authenticateApiKey, async (req, res) => {
+    try {
+        const [devices, packages, apps] = await Promise.all([
+            Notification.distinct('deviceId'),
+            Notification.distinct('packageName'),
+            Notification.distinct('appName')
+        ]);
+
+        res.json({
+            success: true,
+            data: {
+                devices: devices.sort(),
+                packages: packages.sort(),
+                apps: apps.sort()
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching notification metadata:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch notification metadata',
             error: error.message
         });
     }
@@ -251,7 +327,7 @@ router.post('/translate/:id', authenticateApiKey, async (req, res) => {
             });
         }
 
-        const translationResult = await translationService.translateNotification(notification);
+        const translationResult = await translateNotificationText(notification.completeNotificationText || '');
         
         if (!translationResult.success) {
             return res.status(400).json({
