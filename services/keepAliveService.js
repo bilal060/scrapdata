@@ -4,7 +4,7 @@ class KeepAliveService {
     constructor() {
         this.isRunning = false;
         this.intervalId = null;
-        this.serverUrl = process.env.SERVER_URL || 'http://192.168.1.104:8888';
+        this.serverUrl = process.env.SERVER_URL || 'http://127.0.0.1:5090';
         this.apiKey = process.env.API_KEY || 'android-notification-capture-2024-secure-key-v2';
         this.intervalMinutes = 5; // Ping every 5 minutes
     }

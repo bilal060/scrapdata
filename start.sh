@@ -32,23 +32,30 @@ else
     echo "✅ Dependencies already installed"
 fi
 
-echo ""
-echo "🔧 Server Configuration:"
-echo "   - MongoDB URI: mongodb+srv://dbuser:***@cluster0.ey6gj6g.mongodb.net/"
-echo "   - Database: android_db"
-echo "   - Port: 3000"
-echo "   - API Key: your-secret-api-key-here"
-echo ""
+PORT=${PORT:-5090}
+API_BASE="http://localhost:${PORT}"
+HEALTH_URL="${API_BASE}/health"
 
-# Start the server
+# Print configuration summary
+cat <<EOCONFIG
+
+🔧 Server Configuration:
+   - MongoDB URI: ${MONGODB_URI:-mongodb://localhost:27017}
+   - Database: ${MONGODB_DB_NAME:-android_db}
+   - Port: ${PORT}
+   - API Key: ${API_KEY:-android-notification-capture-2024-secure-key-v2}
+
+EOCONFIG
+
+echo ""
 echo "🚀 Starting server..."
 echo "   - Development mode: npm run dev"
 echo "   - Production mode: npm start"
 echo ""
 echo "📡 Server will be available at:"
-echo "   - API Base: http://localhost:3000/api"
-echo "   - Health Check: http://localhost:3000/health"
-echo "   - Documentation: http://localhost:3000/api"
+echo "   - API Base: ${API_BASE}/api"
+echo "   - Health Check: ${HEALTH_URL}"
+echo "   - Documentation: ${API_BASE}/api"
 echo ""
 
 npm start

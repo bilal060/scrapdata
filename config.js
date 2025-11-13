@@ -4,7 +4,7 @@ module.exports = {
     DATABASE_NAME: process.env.MONGODB_DB_NAME || 'android_db',
     
     // Server Configuration
-    PORT: process.env.PORT || 8888,
+    PORT: process.env.PORT || 5090,
     HOST: process.env.HOST || '0.0.0.0',
     NODE_ENV: process.env.NODE_ENV || 'development',
     
