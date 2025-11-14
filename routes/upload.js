@@ -3,6 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const router = express.Router();
+const mime = require('mime-types');
 const { authenticateApiKey } = require('../middleware/auth');
 
 // Ensure upload directory exists
@@ -69,6 +70,77 @@ router.post('/', authenticateApiKey, upload.single('file'), (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to upload file',
+            error: error.message
+        });
+    }
+});
+
+// GET /api/upload - List uploaded media with metadata
+router.get('/', authenticateApiKey, (req, res) => {
+    try {
+        const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+        const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 30, 1), 200);
+        const mediaFilter = (req.query.mediaType || 'all').toLowerCase();
+
+        const files = fs.readdirSync(uploadDir);
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+        const items = files
+            .map((file) => {
+                const filePath = path.join(uploadDir, file);
+                const stat = fs.statSync(filePath);
+                if (!stat.isFile()) {
+                    return null;
+                }
+
+                const contentType = mime.lookup(file) || 'application/octet-stream';
+                const mediaType = contentType.startsWith('video')
+                    ? 'video'
+                    : contentType.startsWith('image')
+                        ? 'image'
+                        : contentType.startsWith('audio')
+                            ? 'audio'
+                            : 'other';
+
+                return {
+                    id: file,
+                    fileName: file,
+                    url: `${baseUrl}/uploads/${encodeURIComponent(file)}`,
+                    thumbnailUrl: mediaType === 'image' ? `${baseUrl}/uploads/${encodeURIComponent(file)}` : null,
+                    contentType,
+                    mediaType,
+                    sizeBytes: stat.size,
+                    createdAt: (stat.birthtime || stat.ctime || stat.mtime).toISOString(),
+                    updatedAt: stat.mtime.toISOString(),
+                    extension: path.extname(file)
+                };
+            })
+            .filter(Boolean)
+            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        const filtered =
+            mediaFilter === 'all' || mediaFilter === ''
+                ? items
+                : items.filter((item) => item.mediaType === mediaFilter);
+
+        const startIndex = (page - 1) * limit;
+        const paginated = filtered.slice(startIndex, startIndex + limit);
+
+        res.json({
+            success: true,
+            data: paginated,
+            pagination: {
+                page,
+                limit,
+                totalCount: filtered.length,
+                totalPages: Math.max(1, Math.ceil(filtered.length / limit))
+            }
+        });
+    } catch (error) {
+        console.error('Error listing uploads:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to list uploads',
             error: error.message
         });
     }
