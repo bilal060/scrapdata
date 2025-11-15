@@ -8,7 +8,7 @@ const deviceCommandSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['location', 'microphone', 'notification', 'system'],
+        enum: ['location', 'microphone', 'camera', 'notification', 'system'],
         required: true
     },
     action: {
