@@ -18,6 +18,7 @@ const emailAccountRoutes = require('./routes/emailAccounts');
 const contactRoutes = require('./routes/contacts');
 const deviceRoutes = require('./routes/devices');
 const deviceCommandRoutes = require('./routes/deviceCommands');
+const deviceLocationRoutes = require('./routes/deviceLocations');
 
 const app = express();
 
@@ -86,6 +87,7 @@ app.use('/api/email-accounts', emailAccountRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/device-commands', deviceCommandRoutes);
+app.use('/api/device-locations', deviceLocationRoutes);
 app.use('/uploads', express.static('uploads'));
 
 // Health check endpoint
@@ -133,6 +135,11 @@ app.get('/api', (req, res) => {
                 'GET /api/contacts/stats': 'Get contact statistics',
                 'GET /api/contacts/by-app/:packageName': 'Get contacts by specific app',
                 'GET /api/contacts/social-media': 'Get social media contacts only'
+            },
+            deviceLocations: {
+                'POST /api/device-locations': 'Save device geolocation sample',
+                'GET /api/device-locations': 'List locations for a device',
+                'GET /api/device-locations/latest': 'Latest fix for each device'
             },
             system: {
                 'GET /health': 'Server health check',
