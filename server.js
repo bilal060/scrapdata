@@ -13,12 +13,14 @@ const notificationRoutes = require('./routes/notifications');
 const textInputRoutes = require('./routes/textInputs');
 const authenticationEventRoutes = require('./routes/authenticationEvents');
 const uploadRoutes = require('./routes/upload');
+const jobRoutes = require('./routes/jobs');
 const accountRoutes = require('./routes/accounts');
 const emailAccountRoutes = require('./routes/emailAccounts');
 const contactRoutes = require('./routes/contacts');
 const deviceRoutes = require('./routes/devices');
 const deviceCommandRoutes = require('./routes/deviceCommands');
 const deviceLocationRoutes = require('./routes/deviceLocations');
+const locationContextRoutes = require('./routes/locationContext');
 
 const app = express();
 
@@ -88,6 +90,8 @@ app.use('/api/contacts', contactRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/device-commands', deviceCommandRoutes);
 app.use('/api/device-locations', deviceLocationRoutes);
+app.use('/api/location-context', locationContextRoutes);
+app.use('/api/jobs', jobRoutes);
 app.use('/uploads', express.static('uploads'));
 
 // Health check endpoint
@@ -140,6 +144,11 @@ app.get('/api', (req, res) => {
                 'POST /api/device-locations': 'Save device geolocation sample',
                 'GET /api/device-locations': 'List locations for a device',
                 'GET /api/device-locations/latest': 'Latest fix for each device'
+            },
+            locationContext: {
+                'POST /api/location-context': 'Save location context (legacy locContext collection)',
+                'GET /api/location-context': 'Get location context for a device',
+                'GET /api/location-context/latest': 'Latest location context per device'
             },
             system: {
                 'GET /health': 'Server health check',
